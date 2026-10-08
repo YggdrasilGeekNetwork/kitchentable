@@ -1,0 +1,51 @@
+*.rbc
+capybara-*.html
+.rspec
+/log
+/tmp
+/db/*.sqlite3
+/db/*.sqlite3-journal
+/db/*.sqlite3-[0-9]*
+/public/system
+/coverage/
+/spec/tmp
+*.orig
+rerun.txt
+pickle-email-*.html
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+# Ignore pidfiles, but keep the directory.
+/tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
+
+# Ignore uploaded files in development.
+/storage/*
+!/storage/.keep
+/tmp/storage/*
+!/tmp/storage/
+!/tmp/storage/.keep
+
+/public/assets
+.byebug_history
+
+# Ignore master key for decrypting credentials and any other unencrypted secrets.
+/config/master.key
+/.env
+/.env.*
+!/.env.example
+
+/public/assets
+.DS_Store
+
+# Ignore bundler config.
+/.bundle
+
+# Node/importmap vendor cache (pins re-downloaded on install, not tracked).
+/vendor/javascript/*
+!/vendor/javascript/.keep

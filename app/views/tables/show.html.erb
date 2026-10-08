@@ -1,0 +1,35 @@
+<% if @seat_id.blank? %>
+  <div class="max-w-2xl mx-auto mt-10 p-6">
+    <h1 class="text-xl font-semibold">Mesa <%= @table.name.presence || @table.slug %></h1>
+    <p class="text-sm text-gray-500">Formato: <%= @table.format %> · Código: <code><%= @table.slug %></code></p>
+
+    <h2 class="mt-6 font-medium">Entrar na mesa</h2>
+    <%= form_with url: table_seats_path(@table), method: :post, class: "flex flex-col gap-3 mt-2" do %>
+      <input type="text" name="display_name" placeholder="Seu nome" required class="border rounded w-full p-2">
+      <button type="submit" class="bg-black text-white rounded p-2">Entrar</button>
+    <% end %>
+  </div>
+<% else %>
+  <% content_for :title, "Mesa #{@table.name.presence || @table.slug}" %>
+  <div class="kt-board" data-controller="board"
+       data-board-table-slug-value="<%= @table.slug %>"
+       data-board-seat-id-value="<%= @seat_id %>"
+       data-board-seat-token-value="<%= @seat_token %>"
+       data-board-invite-url-value="<%= table_url(@table) %>"
+       data-board-format-value="<%= @table.format %>"
+       data-board-decklist-error-value="<%= flash.now[:alert].present? || flash[:alert].present? %>">
+    <% flash.each do |type, message| %>
+      <div class="kt-flash kt-flash-<%= type %>" data-board-target="flash"><%= message %></div>
+    <% end %>
+    <div class="kt-loading" data-board-target="root">Conectando à mesa <code><%= @table.slug %></code>…</div>
+
+    <dialog class="kt-dialog kt-decklist-dialog" data-board-target="decklistDialog">
+      <header class="kt-dialog-header">
+        <h2>Seu deck · <%= @table.format.capitalize %></h2>
+        <button type="button" class="kt-icon-btn" data-action="board#closeDecklist" aria-label="Fechar">✕</button>
+      </header>
+      <p class="kt-muted">Cole a lista em texto (exportação do Moxfield, Archidekt, Arena…). Enviar de novo reinicia o seu jogo.</p>
+      <%= render "tables/decklist_form", table: @table, seat_id: @seat_id %>
+    </dialog>
+  </div>
+<% end %>

@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"python3 - <<'EOF'\\ndef sub(p, pairs):\\n    s=open(p).read()\\n    for a,b in pairs:\\n        assert a in s, (p,a)\\n        s=s.replace(a,b,1)\\n    open(p,\\\"w\\\").write(s)\\np=\\\"app/javascript...",
+  "error": "Exit code 1",
+  "timestamp": "2026-10-08T12:32:28.425Z",
+  "retry_count": 1
+}

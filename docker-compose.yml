@@ -1,0 +1,52 @@
+# Self-hosting entrypoint. `docker compose --profile with-datastores up` runs a fully
+# self-contained stack (Postgres + Redis included). Plain `docker compose up` runs only
+# `web` + `worker`, for self-hosters who already have their own Postgres/Redis and just
+# set DATABASE_URL / REDIS_URL to point at them.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kitchentable
+      POSTGRES_PASSWORD: kitchentable
+      POSTGRES_DB: kitchentable_production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U kitchentable" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    profiles: [ "with-datastores" ]
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    profiles: [ "with-datastores" ]
+
+  web:
+    build: .
+    command: [ "./bin/thrust", "./bin/rails", "server" ]
+    environment: &app_env
+      RAILS_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-postgres://kitchentable:kitchentable@db:5432/kitchentable_production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?set SECRET_KEY_BASE (bin/rails secret)}
+      ENABLE_AV: ${ENABLE_AV:-false}
+      ENABLE_OVERLAY: ${ENABLE_OVERLAY:-false}
+    ports:
+      - "3000:80"
+
+  worker:
+    build: .
+    command: [ "bin/jobs" ]
+    environment: *app_env
+
+volumes:
+  postgres_data:
+  redis_data:

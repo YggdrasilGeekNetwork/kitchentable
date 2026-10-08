@@ -1,0 +1,2 @@
+# Intentionally empty — tests build GameTable/Seat records directly or use the fakes
+# under test/support/fakes/, so there's nothing useful to fixture here.

@@ -1,0 +1,23 @@
+<%= form_with url: table_seat_decklist_path(table, seat_id), method: :post,
+              class: "kt-form", data: { controller: "decklist-form" } do %>
+  <input type="hidden" name="seat_id" value="<%= seat_id %>">
+  <input type="hidden" name="mtg_format" value="<%= table.format %>">
+  <label class="kt-field">
+    Lista (texto)
+    <textarea name="raw_text" rows="12" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;35 Island"
+              data-decklist-form-target="list" data-action="input->decklist-form#refreshCommanderOptions"><%= @raw_text %></textarea>
+  </label>
+  <% if table.format == "commander" %>
+    <label class="kt-field">
+      Comandante
+      <input type="text" name="commander" value="<%= @commander %>" list="commander-options" required
+             placeholder="Atraxa, Praetors' Voice" autocomplete="off">
+    </label>
+    <label class="kt-field">
+      Segundo comandante (Partner/Background) — opcional
+      <input type="text" name="partner" value="<%= @partner %>" list="commander-options" autocomplete="off">
+    </label>
+    <datalist id="commander-options" data-decklist-form-target="commanderOptions"></datalist>
+  <% end %>
+  <button type="submit" class="kt-btn kt-btn-primary">Enviar deck</button>
+<% end %>

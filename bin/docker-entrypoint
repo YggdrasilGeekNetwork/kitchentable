@@ -1,0 +1,18 @@
+#!/bin/bash -e
+
+# Enable jemalloc for reduced memory usage and latency.
+if [ -z "${LD_PRELOAD+x}" ]; then
+    LD_PRELOAD=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
+    export LD_PRELOAD
+fi
+
+# If running the rails server then create or migrate existing database
+if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
+  # primary/cache/queue intentionally share one physical database (see config/database.yml)
+  # so self-hosting only needs one DATABASE_URL — but that means db:prepare does NOT
+  # cascade into the cache/queue roles. db:prepare_solid loads their schemas only when
+  # their tables are missing (reloading them would wipe queued jobs on every deploy).
+  ./bin/rails db:prepare db:prepare_solid db:seed
+fi
+
+exec "${@}"

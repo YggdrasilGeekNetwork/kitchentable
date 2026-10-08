@@ -1,0 +1,30 @@
+<div class="max-w-md mx-auto mt-16 p-6">
+  <h1 class="text-xl font-semibold mb-4">Criar mesa</h1>
+
+  <%= form_with url: tables_path, method: :post, class: "flex flex-col gap-3" do %>
+    <label>
+      Seu nome
+      <input type="text" name="display_name" required class="border rounded w-full p-2">
+    </label>
+
+    <label>
+      Formato
+      <select name="mtg_format" class="border rounded w-full p-2">
+        <option value="commander">Commander</option>
+        <option value="standard">Standard</option>
+      </select>
+    </label>
+
+    <label>
+      Nome da mesa (opcional)
+      <input type="text" name="name" class="border rounded w-full p-2">
+    </label>
+
+    <label>
+      Assentos
+      <input type="number" name="max_seats" value="4" min="1" max="8" class="border rounded w-full p-2">
+    </label>
+
+    <button type="submit" class="bg-black text-white rounded p-2">Criar mesa</button>
+  <% end %>
+</div>
