@@ -29,6 +29,9 @@ const MANA_COLORS = [["W", "Branco"], ["U", "Azul"], ["B", "Preto"], ["R", "Verm
 const PERM_HEIGHT = 12
 const PLAYER_COUNTERS = ["Veneno", "Energia", "Experiência"]
 const OPENING_HAND_SIZE = 7
+// The first mulligan is free (you still keep 7); each one after it bottoms one more card.
+const FREE_MULLIGANS = 1
+const cardsToBottom = (mulligans) => Math.max(0, mulligans - FREE_MULLIGANS)
 // Holding a finger this long on a card or the battlefield opens its menu (touch
 // screens have no right click).
 const LONG_PRESS_MS = 550
@@ -920,10 +923,11 @@ export default class extends Controller {
     const exile = h("div", { class: "kt-dropzone" }, "Exílio")
     this.makeDropTarget(exile, this.dropTo("exile"))
 
-    // London mulligan: after N mulligans you keep 7 − N, bottoming the rest first.
-    const keepSize = Math.max(0, OPENING_HAND_SIZE - me.mulligan_count)
+    // London mulligan with a free first one: after N mulligans you keep 7 − (N − 1),
+    // bottoming the rest first.
+    const keepSize = Math.max(0, OPENING_HAND_SIZE - cardsToBottom(me.mulligan_count))
     const owed = Math.max(0, me.zones.hand.length - keepSize)
-    const nextKeep = Math.max(0, OPENING_HAND_SIZE - me.mulligan_count - 1)
+    const nextKeep = Math.max(0, OPENING_HAND_SIZE - cardsToBottom(me.mulligan_count + 1))
 
     return h("div", { class: "kt-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Mão inicial" },
       h("div", { class: "kt-opening" },
@@ -937,7 +941,9 @@ export default class extends Controller {
         me.mulligan_count
           ? h("p", { class: owed ? "kt-warning" : "kt-muted" }, owed
             ? `Mulligan londrino (${me.mulligan_count}): arraste ${plural(owed, "carta", "cartas")} da mão para o fundo do grimório.`
-            : `Mulligan londrino (${me.mulligan_count}): pronto, você pode manter.`)
+            : me.mulligan_count <= FREE_MULLIGANS
+              ? `Mulligan londrino (${me.mulligan_count}): o primeiro é grátis, você pode manter as ${OPENING_HAND_SIZE}.`
+              : `Mulligan londrino (${me.mulligan_count}): pronto, você pode manter.`)
           : null,
         h("div", { class: "kt-fan" }, me.zones.hand.map((instance, i, all) => {
           const el = this.renderCard(instance, { zone: "hand", seat: me })

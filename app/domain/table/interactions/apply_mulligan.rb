@@ -2,8 +2,8 @@ module Table
   module Interactions
     # London mulligan: shuffle hand back into library and draw a fresh 7. Only while
     # the opening hand hasn't been kept. Once they keep, the player puts cards on the
-    # bottom themselves (dragging them to the library's bottom) — `mulligan_count`
-    # shows everyone how many they owe.
+    # bottom themselves (dragging them to the library's bottom), one card per mulligan
+    # after the first, which is free — the board enforces it before letting them keep.
     class ApplyMulligan < BaseGameMutation
       HAND_SIZE = 7
 

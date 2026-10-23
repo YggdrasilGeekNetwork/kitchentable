@@ -16,7 +16,7 @@ export function describeEvent(event, view) {
 
   switch (event.event_type) {
     case "start_game": return `${who} embaralhou o deck e comprou 7 (${p.library_size} no grimório)`
-    case "keep_hand": return `${who} manteve a mão com ${p.hand_size} cartas${p.mulligan_count ? ` após ${p.mulligan_count} mulligan(s) — deve colocar ${p.mulligan_count} no fundo` : ""}`
+    case "keep_hand": return `${who} manteve a mão com ${p.hand_size} cartas${p.mulligan_count ? ` após ${p.mulligan_count} mulligan(s)` : ""}`
     case "mulligan": return `${who} fez mulligan (${p.mulligan_count})`
     case "draw": return `${who} comprou ${plural(p.count, "carta", "cartas")}`
     case "mill": return `${who} moeu ${plural(p.count, "carta", "cartas")}`
