@@ -11,11 +11,13 @@ module Table
     # without one, piles (library, graveyard, exile — index 0 is the top) get the card
     # on top and hand/command zone at the end. `x`/`y` place a card on the battlefield.
     # A creature arriving under a new controller (cast, put onto the battlefield, or
-    # stolen) gets summoning sickness.
+    # stolen) gets summoning sickness. A commander leaving the command zone for the
+    # stack or the battlefield counts as a cast, for commander tax.
     module CardMovement
       include Dry::Monads[:result] # Failure[...] is looked up lexically, from this module
 
       PILES = %w[library graveyard exile].freeze
+      CAST_ZONES = %w[stack battlefield].freeze
 
       private
 
@@ -33,6 +35,9 @@ module Table
         moved = moved.with(x: x.to_f, y: y.to_f) if to_zone == "battlefield" && x && y
         if to_zone == "battlefield" && !repositioning && creature?(instance)
           moved = moved.with(sick: true)
+        end
+        if instance.commander && from_zone == "command" && CAST_ZONES.include?(to_zone)
+          moved = moved.with(command_casts: moved.command_casts + 1)
         end
 
         new_state = state.without_peeked(instance_id)

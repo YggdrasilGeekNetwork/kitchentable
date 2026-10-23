@@ -1,5 +1,5 @@
 <%= form_with url: table_seat_decklist_path(table, seat_id), method: :post,
-              class: "kt-form", data: { controller: "decklist-form" } do %>
+              id: "kt-decklist-form", class: "kt-form", data: { controller: "decklist-form" } do %>
   <input type="hidden" name="mtg_format" value="<%= table.format %>">
   <% if @decklist_errors.present? %>
     <div class="kt-form-error" role="alert">

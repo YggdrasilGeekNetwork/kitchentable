@@ -9,12 +9,14 @@ module Table
         @table_repo = table_repo
       end
 
-      def call(table_slug:, seat_id:, format:, raw_text:, commander_names: [])
+      # `ignore_deck_size`: the player saw the wrong-card-count warning and chose to
+      # play the deck anyway.
+      def call(table_slug:, seat_id:, format:, raw_text:, commander_names: [], ignore_deck_size: false)
         validated = step validate(SubmitDecklistContract, format: format)
         table = step find_table(table_slug)
         seat = step find_seat(table, seat_id)
         validated_deck = step Interactions::ValidateDecklist.call(
-          raw_text: raw_text, format: validated[:format], commander_names: commander_names
+          raw_text: raw_text, format: validated[:format], commander_names: commander_names, ignore_deck_size: ignore_deck_size
         )
         new_state = step Interactions::StartGame.call(table_slug: table_slug, seat_id: seat.id.to_s, validated_deck: validated_deck)
 

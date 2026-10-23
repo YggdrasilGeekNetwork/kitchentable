@@ -47,6 +47,45 @@ class DecklistSubmissionTest < ActionDispatch::IntegrationTest
     assert_select ".kt-flash", count: 0
   end
 
+  def card!(name, type_line: "Artifact")
+    Card.create!(scryfall_oracle_id: SecureRandom.uuid, name: name, layout: "normal", type_line: type_line,
+                 legalities: { "commander" => "legal" })
+  end
+
+  test "a deck whose only problem is its card count gets a warning with a button to play it anyway" do
+    card!("Atraxa, Praetors' Voice", type_line: "Legendary Creature")
+    fillers = (1..50).map { |i| card!("Filler #{i}").name }
+    sit_as(@alice)
+
+    post table_seat_decklist_path(@table, @alice),
+      params: { mtg_format: "commander", raw_text: fillers.map { |n| "1 #{n}" }.join("\n"), commander: "Atraxa, Praetors' Voice" }
+
+    assert_response :unprocessable_entity
+    assert_select "dialog[data-board-target=deckSizeDialog]", text: /exatamente 100 cartas/
+    assert_select "button[type=submit][form=kt-decklist-form][name=ignore_deck_size][value='1']"
+    assert_select "form#kt-decklist-form"
+    assert_select ".kt-form-error", count: 0
+    assert_select ".kt-board[data-board-decklist-error-value=?]", "true"
+    assert_nil Persistence::Redis::GameStateStore.new.fetch(table_slug: @table.slug).seat(@alice.id.to_s)
+
+    post table_seat_decklist_path(@table, @alice),
+      params: { mtg_format: "commander", raw_text: fillers.map { |n| "1 #{n}" }.join("\n"), commander: "Atraxa, Praetors' Voice",
+                ignore_deck_size: "1" }
+
+    assert_redirected_to table_path(@table, seat: @alice.token)
+    assert_equal 50, Persistence::Redis::GameStateStore.new.fetch(table_slug: @table.slug).seat(@alice.id.to_s).instances.size - 1
+  end
+
+  test "a deck with other problems besides its size is refused, without the play-anyway warning" do
+    sit_as(@alice)
+
+    post table_seat_decklist_path(@table, @alice),
+      params: { mtg_format: "commander", raw_text: "1 Not A Real Card", commander: "Also Not Real" }
+
+    assert_select "dialog[data-board-target=deckSizeDialog]", count: 0
+    assert_select "button[name=ignore_deck_size]", count: 0
+  end
+
   test "only Commander tables show the commander field" do
     standard = GameTable.create!(slug: "standardtest", format: "standard", host_session_id: "host",
                                  max_seats: 4, last_activity_at: Time.current)

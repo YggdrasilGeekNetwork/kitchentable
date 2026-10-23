@@ -11,6 +11,12 @@ class GameStateTest < ActiveSupport::TestCase
     assert_equal 35, rebuilt.seat("1").life_total
   end
 
+  test "keeps how many times a commander was cast through to_h/from_h" do
+    commander = Table::Entities::CardInstance.new(card_id: 1, commander: true, command_casts: 3)
+
+    assert_equal 3, Table::Entities::CardInstance.from_h(commander.to_h).command_casts
+  end
+
   test "caps the log at LOG_CAP entries" do
     state = Table::Entities::GameState.blank
 

@@ -8,11 +8,15 @@ module Table
         @catalog = catalog
       end
 
-      def call(resolved)
+      # `ignore_deck_size`: the player was warned about the card count and chose to
+      # play anyway.
+      def call(resolved, ignore_deck_size: false)
         errors = []
 
         total = resolved.sum { |r| r[:entry].quantity }
-        errors << { type: "deck_size", message: "Decks de Standard precisam de pelo menos #{MIN_DECK_SIZE} cartas (encontradas: #{total})" } if total < MIN_DECK_SIZE
+        if total < MIN_DECK_SIZE && !ignore_deck_size
+          errors << { type: "deck_size", message: "Decks de Standard precisam de pelo menos #{MIN_DECK_SIZE} cartas (encontradas: #{total})" }
+        end
 
         errors.concat(copy_limit_violations(resolved))
         errors.concat(legality_violations(resolved))

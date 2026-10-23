@@ -7,9 +7,9 @@ class ValidateDecklistTest < ActiveSupport::TestCase
     @fillers = (1..99).map { |i| @catalog.register(name: "Filler #{i}") }
   end
 
-  def validate(raw_text, format: "commander", commanders: [])
+  def validate(raw_text, format: "commander", commanders: [], ignore_deck_size: false)
     call_interaction(Table::Interactions::ValidateDecklist, deps: { catalog: @catalog },
-                     raw_text: raw_text, format: format, commander_names: commanders)
+                     raw_text: raw_text, format: format, commander_names: commanders, ignore_deck_size: ignore_deck_size)
   end
 
   def list(names) = names.map { |n| "1 #{n}" }.join("\n")
@@ -70,6 +70,38 @@ class ValidateDecklistTest < ActiveSupport::TestCase
 
     assert result.success?, result.inspect
     assert_equal 60, result.value!.library_card_ids.size
+  end
+
+  # --- Wrong card count: a warning the player can override ---
+
+  test "a Commander deck with the wrong card count fails only on its size" do
+    result = validate(list(@fillers.first(97).map(&:name)), commanders: [ "Atraxa, Praetors' Voice" ])
+
+    assert result.failure?
+    assert_equal [ "deck_size" ], result.failure.last.map { |e| e[:type] }
+  end
+
+  test "a player who chose to play anyway gets the deck at its actual size" do
+    result = validate(list(@fillers.first(97).map(&:name)), commanders: [ "Atraxa, Praetors' Voice" ], ignore_deck_size: true)
+
+    assert result.success?, result.inspect
+    assert_equal 97, result.value!.library_card_ids.size
+  end
+
+  test "a short Standard deck can be played anyway too" do
+    @catalog.register(name: "Island", type_line: "Basic Land — Island")
+
+    assert_equal [ "deck_size" ], validate("40 Island", format: "standard").failure.last.map { |e| e[:type] }
+    assert_equal 40, validate("40 Island", format: "standard", ignore_deck_size: true).value!.library_card_ids.size
+  end
+
+  test "playing anyway only skips the card count, not the other rules" do
+    raw = list([ *@fillers.first(97).map(&:name), "Not A Real Card" ])
+
+    result = validate(raw, commanders: [ "Atraxa, Praetors' Voice" ], ignore_deck_size: true)
+
+    assert result.failure?
+    assert_equal [ "unresolved_card" ], result.failure.last.map { |e| e[:type] }
   end
 
   # --- Partner / Background pairs ---

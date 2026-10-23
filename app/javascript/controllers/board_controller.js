@@ -24,6 +24,8 @@ const BANDS = { creature: { top: 3, bottom: 31 }, other: { top: 36, bottom: 62 }
 const CARD_COUNTERS = ["+1/+1", "-1/-1", "Lealdade", "Carga"]
 const MIN_OPPONENT_SLOTS = 3
 const LETHAL_COMMANDER_DAMAGE = 21
+// Extra generic mana per previous cast from the command zone.
+const COMMANDER_TAX = 2
 const MANA_COLORS = [["W", "Branco"], ["U", "Azul"], ["B", "Preto"], ["R", "Vermelho"], ["G", "Verde"], ["C", "Incolor"]]
 // A permanent's height as % of its battlefield's height (board.css --kt-perm-h).
 const PERM_HEIGHT = 12
@@ -43,7 +45,7 @@ const SHORTCUTS = [
 ]
 
 export default class extends Controller {
-  static targets = ["root", "decklistDialog", "decklistWarning", "decklistSubmit", "flash"]
+  static targets = ["root", "decklistDialog", "decklistWarning", "decklistSubmit", "deckSizeDialog", "flash"]
   static values = {
     tableSlug: String, seatId: String, seatToken: String, inviteUrl: String, format: String, maxSeats: Number, decklistError: Boolean
   }
@@ -90,6 +92,7 @@ export default class extends Controller {
     this.element.addEventListener("pointerdown", this.onPointerDown)
 
     if (this.decklistErrorValue) this.openDecklist()
+    if (this.hasDeckSizeDialogTarget) this.deckSizeDialogTarget.showModal()
     this.flashTargets.forEach((el) => setTimeout(() => el.remove(), 3500))
   }
 
@@ -535,6 +538,7 @@ export default class extends Controller {
 
   renderMyArea() {
     const me = this.me
+    const hasCommander = (this.view.commanders || []).some((c) => c.owner_seat_id === me.seat_id)
     return h("section", { class: "kt-mine", "aria-label": "Sua área" },
       this.renderMyHeader(me),
       h("div", { class: "kt-field-wrap" },
@@ -542,12 +546,15 @@ export default class extends Controller {
         this.renderStack()),
       h("div", { class: "kt-tray" },
         this.renderHand(me),
+        hasCommander ? this.renderCommandZone(me) : null,
         this.renderLibrary(me),
         h("div", { class: "kt-zones" },
-          this.renderZoneTile(me, "command"),
+          hasCommander ? null : this.renderZoneTile(me, "command"),
           this.renderZoneTile(me, "graveyard"),
           this.renderZoneTile(me, "exile")),
-        this.renderManaPool(me)))
+        h("div", { class: "kt-side" },
+          this.renderCommanderTax(me),
+          this.renderManaPool(me))))
   }
 
   // Cards sit where they were dropped (x/y as % of the area); cards without a spot yet
@@ -737,6 +744,40 @@ export default class extends Controller {
       })))
     this.makeDropTarget(hand, this.dropTo("hand"))
     return hand
+  }
+
+  // Commander games: the command zone sits next to the hand at full size, so a
+  // commander is cast straight from it (double-click or drag) — no pile to open. Stays
+  // as an empty drop spot while the commander is elsewhere.
+  renderCommandZone(seat) {
+    const cards = seat.zones.command
+    const zone = h("div", { class: "kt-command" },
+      h("span", { class: "kt-zone-label" }, "Comando"),
+      h("div", { class: "kt-command-cards" }, cards.length
+        ? cards.map((instance) => {
+          const el = this.renderCard(instance, { zone: "command", seat })
+          el.addEventListener("dblclick", () => this.playFromHand(instance))
+          return el
+        })
+        : h("div", { class: "kt-card kt-card-slot" })))
+    this.makeDropTarget(zone, this.dropTo("command"))
+    return zone
+  }
+
+  // How many times each of your commanders left the command zone (counted by the
+  // server on every cast from it) and the tax that adds; −/+ fixes a miscount.
+  renderCommanderTax(seat) {
+    const commanders = (this.view.commanders || []).filter((c) => c.owner_seat_id === seat.seat_id)
+    if (!commanders.length) return null
+    return h("div", { class: "kt-tax" }, commanders.map((commander) => {
+      const name = this.view.cards[String(commander.card_id)]?.name || "Comandante"
+      const casts = commander.command_casts || 0
+      const change = (delta) => this.perform("commander_casts", { commander_instance_id: commander.instance_id, delta })
+      return h("div", { class: "kt-tax-row", title: `${name}: saiu da zona de comando ${casts}× — imposto +${casts * COMMANDER_TAX}` },
+        h("div", { class: "kt-tax-head" }, h("span", { class: "kt-tax-name" }, name), h("b", {}, `+${casts * COMMANDER_TAX}`)),
+        h("div", { class: "kt-tax-casts" }, h("span", {}, "Saídas"),
+          this.stepper(`tax|${commander.instance_id}`, casts, change, `Saídas de ${name} da zona de comando`)))
+    }))
   }
 
   // Manual mana tracker: click a color to add, right-click to spend. Not tied to
@@ -1578,6 +1619,11 @@ export default class extends Controller {
   closeDecklist() {
     this.decklistErrorValue = false
     this.decklistDialogTarget.close()
+  }
+
+  // Back to the decklist form, to fix the list instead of playing it as it is.
+  closeDeckSizeWarning() {
+    this.deckSizeDialogTarget.close()
   }
 
   handleKey(event) {

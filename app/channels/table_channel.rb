@@ -73,6 +73,12 @@ class TableChannel < ApplicationCable::Channel
     ))
   end
 
+  def commander_casts(data)
+    handle_result(Table::Actions::AdjustCommanderCasts.call(
+      **seat, commander_instance_id: data["commander_instance_id"].to_s, delta: data["delta"].to_i
+    ))
+  end
+
   def card_counter(data)
     handle_result(Table::Actions::AdjustCardCounter.call(
       **seat, card_instance_id: data["card_instance_id"].to_s, key: data["key"], delta: data["delta"].to_i

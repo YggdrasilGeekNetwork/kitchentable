@@ -32,6 +32,7 @@ export function describeEvent(event, view) {
     case "life_change": return `${who} ${p.delta >= 0 ? "+" : ""}${p.delta} de vida${p.target_seat_id !== event.seat_id ? ` em ${seatName(view, p.target_seat_id)}` : ""} (→ ${p.life_total})`
     case "player_counter": if (p.removed) return `${who} removeu o contador ${p.key} de ${seatName(view, p.target_seat_id)}`
       return `${who}: ${p.key} ${p.delta >= 0 ? "+" : ""}${p.delta} em ${seatName(view, p.target_seat_id)} (→ ${p.value})`
+    case "commander_casts": return `${who} corrigiu as saídas de ${card || "um comandante"} da zona de comando para ${p.total} (imposto +${p.tax})`
     case "commander_damage": return `${seatName(view, p.target_seat_id)} ${p.delta > 0 ? "recebeu" : "teve corrigido"} ${Math.abs(p.delta)} de dano de comandante de ${card || "um comandante"} (total ${p.total}, vida ${p.life_total})${p.lethal ? " — LETAL" : ""}`
     case "card_counter": return `${who}: ${p.key} ${p.delta >= 0 ? "+" : ""}${p.delta} em ${card || "uma carta"} (→ ${p.value})`
     case "flip_card": return `${who} transformou ${card || "uma carta"}`

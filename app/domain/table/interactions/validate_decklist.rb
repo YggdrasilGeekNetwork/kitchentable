@@ -14,7 +14,9 @@ module Table
         @parser = parser
       end
 
-      def call(raw_text:, format:, commander_names: [])
+      # A wrong card count is a `deck_size` error the player may override with
+      # `ignore_deck_size` (see SubmitDecklist); every other error still refuses the deck.
+      def call(raw_text:, format:, commander_names: [], ignore_deck_size: false)
         rules_class = FORMAT_RULES[format.to_s]
         unless rules_class
           return Failure[:validation_error, [ { type: "unknown_format", message: "Formato não suportado: #{format}" } ]]
@@ -23,7 +25,7 @@ module Table
         parsed = step @parser.call(text: raw_text)
         commander_entries = step commander_entries(commander_names, format.to_s)
         resolved = step resolve_cards(commander_entries + parsed[:entries])
-        step rules_class.new(catalog: @catalog).call(without_commanders_in_list(resolved))
+        step rules_class.new(catalog: @catalog).call(without_commanders_in_list(resolved), ignore_deck_size: ignore_deck_size)
       end
 
       private

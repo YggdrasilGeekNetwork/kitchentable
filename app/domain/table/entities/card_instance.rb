@@ -12,15 +12,17 @@ module Table
     # { "name", "type_line", "power", "toughness" }. `commander` marks the cards dealt
     # into the command zone — they stay commanders wherever they go. `sick` marks a
     # creature with summoning sickness (it came under its controller's control this
-    # turn).
+    # turn). `command_casts` counts how many times a commander left the command zone
+    # for the stack or the battlefield — commander tax is 2 per cast.
     class CardInstance
       ATTRIBUTES = %i[card_id owner_seat_id tapped face_down face_index counters x y token power_mod toughness_mod custom
-                      commander sick].freeze
+                      commander sick command_casts].freeze
 
       attr_reader(*ATTRIBUTES)
 
       def initialize(card_id:, owner_seat_id: nil, tapped: false, face_down: false, face_index: 0,
-                     counters: {}, x: nil, y: nil, token: false, power_mod: 0, toughness_mod: 0, custom: nil, commander: false, sick: false)
+                     counters: {}, x: nil, y: nil, token: false, power_mod: 0, toughness_mod: 0, custom: nil, commander: false, sick: false,
+                     command_casts: 0)
         @card_id = card_id
         @owner_seat_id = owner_seat_id&.to_s
         @tapped = tapped
@@ -35,6 +37,7 @@ module Table
         @custom = custom
         @commander = commander
         @sick = sick
+        @command_casts = command_casts
       end
 
       def with(**changes)
@@ -60,7 +63,7 @@ module Table
           "face_down" => face_down, "face_index" => face_index, "counters" => counters,
           "x" => x, "y" => y, "token" => token,
           "power_mod" => power_mod, "toughness_mod" => toughness_mod, "custom" => custom, "commander" => commander,
-          "sick" => sick
+          "sick" => sick, "command_casts" => command_casts
         }
       end
 
@@ -79,7 +82,8 @@ module Table
           toughness_mod: hash["toughness_mod"] || 0,
           custom: hash["custom"],
           commander: hash["commander"] || false,
-          sick: hash["sick"] || false
+          sick: hash["sick"] || false,
+          command_casts: hash["command_casts"] || 0
         )
       end
     end

@@ -11,7 +11,9 @@ module Table
         @catalog = catalog
       end
 
-      def call(resolved)
+      # `ignore_deck_size`: the player was warned about the card count and chose to
+      # play anyway (a deck mid-build, a casual variant...).
+      def call(resolved, ignore_deck_size: false)
         commander_rows, deck_rows = resolved.partition { |r| r[:entry].section == :commander }
         errors = []
 
@@ -21,7 +23,7 @@ module Table
         end
 
         total = resolved.sum { |r| r[:entry].quantity }
-        unless total == DECK_SIZE
+        unless total == DECK_SIZE || ignore_deck_size
           errors << { type: "deck_size", message: "Decks de Commander precisam ter exatamente #{DECK_SIZE} cartas, contando o comandante (encontradas: #{total})" }
         end
 

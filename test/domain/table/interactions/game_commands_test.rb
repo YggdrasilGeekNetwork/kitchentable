@@ -613,8 +613,58 @@ module GameCommandsTest
       damage(6)
 
       view = broadcaster.view_for("2")
-      assert_equal [ { "instance_id" => "cmd", "owner_seat_id" => "2", "card_id" => 77 } ], view["commanders"]
+      assert_equal [ { "instance_id" => "cmd", "owner_seat_id" => "2", "card_id" => 77, "command_casts" => 0 } ], view["commanders"]
       assert_equal({ "cmd" => 6 }, view["seats"].find { |s| s["seat_id"] == "1" }["commander_damage"])
+    end
+  end
+
+  class CommanderTaxTest < Base
+    setup do
+      seat = state.seat("2")
+        .with_card("cmd", card(77, owner: "2", commander: true), zone: "command")
+        .with_card("other", card(78, owner: "2"), zone: "command")
+      state_store.save(table_slug: "table-1", state: state.with_seat("2", seat))
+    end
+
+    def move(id, to_zone) = play(I::ApplyCardMove, seat_id: "2", card_instance_id: id, to_zone: to_zone)
+    def casts = state.seat("2").instances["cmd"].command_casts
+    def adjust(delta, seat_id: "2", id: "cmd") = play(I::ApplyCommanderCasts, seat_id: seat_id, commander_instance_id: id, delta: delta)
+
+    test "every cast from the command zone counts, to the stack or the battlefield" do
+      move("cmd", "stack")
+      move("cmd", "command")
+      move("cmd", "battlefield")
+
+      assert_equal 2, casts
+      assert_equal 2, broadcaster.view_for("1")["commanders"].find { |c| c["instance_id"] == "cmd" }["command_casts"]
+    end
+
+    test "moves that aren't casts from the command zone don't count" do
+      move("cmd", "battlefield")
+      move("cmd", "battlefield")
+      move("cmd", "graveyard")
+      move("cmd", "battlefield")
+      move("other", "battlefield")
+
+      assert_equal 1, casts
+      assert_equal 0, state.seat("2").instances["other"].command_casts
+    end
+
+    test "its owner can fix the count, never below zero" do
+      move("cmd", "battlefield")
+      adjust(2)
+
+      assert_equal 3, casts
+      assert_equal({ "card_id" => 77, "total" => 3, "tax" => 6 }, last_log.payload)
+
+      adjust(-5)
+      assert_equal 0, casts
+    end
+
+    test "only the owner can fix it, and only for a commander" do
+      assert_equal :forbidden, adjust(1, seat_id: "1").failure.first
+      assert_equal :validation_error, adjust(1, id: "other").failure.first
+      assert_equal :validation_error, adjust(0).failure.first
     end
   end
 

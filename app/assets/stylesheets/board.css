@@ -171,6 +171,9 @@ kbd { font-size: 10px; opacity: 0.7; margin-left: 6px; border: 1px solid current
 .kt-hand-slot { flex: 0 1 calc(var(--kt-card-w) + 6px); min-width: 12px; }
 .kt-hand-slot:last-child { flex: none; }
 .kt-hand-cards .kt-card:hover { transform: translateY(-10px); z-index: 2; }
+.kt-command { flex: none; padding: 4px; border-radius: 8px; }
+.kt-command-cards { display: flex; gap: 6px; }
+.kt-command-cards .kt-card:hover { transform: translateY(-10px); z-index: 2; }
 .kt-library { flex: none; padding: 4px; border-radius: 8px; cursor: pointer; }
 .kt-library:hover { background: var(--kt-surface-2); }
 
@@ -207,7 +210,16 @@ kbd { font-size: 10px; opacity: 0.7; margin-left: 6px; border: 1px solid current
 .kt-search-filter { margin: 8px 0 4px; }
 
 /* Mana tracker, beside the zones. */
-.kt-mana { flex: none; width: 104px; display: flex; flex-direction: column; gap: 4px; }
+/* Commander tax above the mana tracker. */
+.kt-side { flex: none; width: 104px; display: flex; flex-direction: column; gap: 8px; }
+.kt-tax { display: flex; flex-direction: column; gap: 4px; }
+.kt-tax-row { display: flex; flex-direction: column; gap: 2px; padding: 3px 5px; border-radius: 6px; background: #2b2230; border: 1px solid #5b3f66; font-size: 12px; }
+.kt-tax-head { display: flex; align-items: baseline; gap: 4px; }
+.kt-tax-name { flex: 1; min-width: 0; color: #d6c3e0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kt-tax-head b { font-size: 14px; }
+.kt-tax-casts { display: flex; align-items: center; gap: 3px; color: var(--kt-muted); }
+.kt-tax-casts > span { flex: 1; }
+.kt-mana { display: flex; flex-direction: column; gap: 4px; }
 .kt-mana-head { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--kt-muted); }
 .kt-mana-head b { color: var(--kt-text); font-size: 14px; }
 .kt-mana-clear { margin-left: auto; font-size: 11px; padding: 0 4px; }
@@ -248,6 +260,8 @@ kbd { font-size: 10px; opacity: 0.7; margin-left: 6px; border: 1px solid current
 .kt-peek-slot { display: flex; flex-direction: column; gap: 2px; color: var(--kt-muted); }
 .kt-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .kt-dialog-header h2 { margin: 0; font-size: 16px; }
+.kt-confirm-dialog { width: min(440px, 92vw); }
+.kt-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
 .kt-opening { text-align: center; --kt-card-w: 130px; }
 .kt-opening h2 { margin: 0 0 10px; }

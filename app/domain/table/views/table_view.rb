@@ -114,7 +114,8 @@ module Table
             next unless instance.commander
 
             @card_ids << instance.card_id
-            { "instance_id" => id, "owner_seat_id" => instance.owner_seat_id, "card_id" => instance.card_id }
+            { "instance_id" => id, "owner_seat_id" => instance.owner_seat_id, "card_id" => instance.card_id,
+              "command_casts" => instance.command_casts }
           end
         end
       end
