@@ -68,14 +68,16 @@ The registry login uses the workflow's own `GITHUB_TOKEN`; nothing to configure.
 
 ### 4. Deploy
 
-Push to `master`, or run **Actions → Deploy → Run workflow**. The first run takes a few
+Push to `master`, or run **Actions → Deploy → Run workflow** (deploys `master` as it is,
+without re-running CI — also the way to retry a failed deploy). The first run takes a few
 minutes longer (Docker install, Postgres/Redis boot, certificate issuance). On a new
 database the first boot also queues the Scryfall card catalog sync, which takes about a
 minute to fill the catalog.
 
 ## What every deploy does
 
-1. **CI** — the deploy only continues if lint, security scan and tests pass.
+1. **CI** — the CI workflow runs on the push; only when lint, security scan and tests
+   pass does it trigger the Deploy workflow, which deploys the commit CI tested.
 2. **Checks** — required variables/secrets are present; with `APP_DOMAIN`, that its DNS
    already points at the droplet (Let's Encrypt needs it).
 3. **`bin/bootstrap-droplet`** over SSH — each step checks before acting: 2 GB swap,

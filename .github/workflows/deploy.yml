@@ -1,11 +1,14 @@
 # Deploys master to the DigitalOcean droplet, from GitHub's runners — never from a dev
 # machine. Idempotent: the same steps set up a brand-new droplet or update a running
 # one (bin/bootstrap-droplet and `kamal setup` both only do what's missing).
-# Setup and required variables/secrets: docs/deploy.md.
+# Runs after CI passes on a push to master (deploying the commit CI tested), or by hand,
+# without re-running CI. Setup and required variables/secrets: docs/deploy.md.
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: [ CI ]
+    types: [ completed ]
     branches: [ master ]
   workflow_dispatch:
     inputs:
@@ -23,11 +26,13 @@ permissions:
   packages: write
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
   deploy:
-    needs: ci
+    # Only a green CI run on a push: `branches: [ master ]` alone also matches a pull
+    # request from a fork whose branch happens to be called master.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -55,6 +60,8 @@ jobs:
           fi
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Image name
         # GHCR needs lowercase names; the repository owner may not be.

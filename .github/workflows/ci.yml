@@ -2,10 +2,8 @@ name: CI
 
 on:
   pull_request:
+  # A green run on a push to master triggers the Deploy workflow.
   push:
-    # master runs CI as the first job of the Deploy workflow.
-    branches-ignore: [ master ]
-  workflow_call:
 
 permissions:
   contents: read
