@@ -6,7 +6,7 @@ module Table
 
       def call(table_slug:, seat_id:, card_instance_id:, to_zone:, to_position: nil, to_seat_id: nil, x: nil, y: nil)
         unless Entities::SeatState::ZONES.include?(to_zone)
-          return Failure[:validation_error, "Unknown zone: #{to_zone}"]
+          return Failure[:validation_error, "Zona desconhecida: #{to_zone}"]
         end
 
         step apply(table_slug) { |state|

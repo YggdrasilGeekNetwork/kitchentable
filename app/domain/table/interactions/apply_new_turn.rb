@@ -11,7 +11,7 @@ module Table
 
       def new_turn(state, seat_id)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         new_seat_state, drew = begin_turn(seat_state)
         Success(append_log(state.with_seat(seat_id, new_seat_state), seat_id: seat_id, event_type: "new_turn", payload: { "drew" => drew }))

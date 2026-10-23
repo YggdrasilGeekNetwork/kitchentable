@@ -23,7 +23,8 @@
   battlefield (tap/untap all, new turn, proliferate, tokens, card search, custom
   cards) and for cards (move, counters, P/T modifiers, transform, token copies,
   remove); opening-hand keep/mulligan screen; shortcuts D/U/S/N/T; log + chat.
-- Deploy: `Dockerfile`, `docker-compose.yml`, `render.yaml`, Scryfall self-seed + daily
+- Deploy: GitHub Actions CI + idempotent Kamal deploy to a DigitalOcean droplet
+  (docs/deploy.md); also `docker-compose.yml`, `render.yaml`; Scryfall self-seed + daily
   recurring sync.
 
 ## Follow-ups
@@ -32,8 +33,9 @@
   acted since), select all / multi-select drag, attachments (auras, equipment),
   sleeves, touch support.
 - Partner/Background pairing isn't validated (any two cards are accepted).
-- `bin/docker-entrypoint` reloads `queue_schema.rb` (which recreates Solid Queue's
-  tables) on every boot — pending jobs are lost on each deploy.
+- Upgrade to Rails 8.1 before Rails 8.0 support ends (2026-11-07); then drop the
+  EOLRails entry from `config/brakeman.ignore`.
+- Automated Postgres backups for the droplet (docs/deploy.md).
 
 ## Phase 2 — Audio/video calling (`ENABLE_AV`)
 

@@ -17,7 +17,7 @@ module Table
       def call(raw_text:, format:, commander_names: [])
         rules_class = FORMAT_RULES[format.to_s]
         unless rules_class
-          return Failure[:validation_error, [ { type: "unknown_format", message: "Unsupported format: #{format}" } ]]
+          return Failure[:validation_error, [ { type: "unknown_format", message: "Formato não suportado: #{format}" } ]]
         end
 
         parsed = step @parser.call(text: raw_text)
@@ -35,7 +35,7 @@ module Table
 
         names = Array(commander_names).map { |n| n.to_s.strip }.reject(&:empty?)
         if names.empty?
-          return Failure[:validation_error, [ { type: "commander_missing", message: "Choose your commander" } ]]
+          return Failure[:validation_error, [ { type: "commander_missing", message: "Escolha o seu comandante" } ]]
         end
 
         Success(names.map { |name|
@@ -72,7 +72,7 @@ module Table
             { entry: entry, card: card }
           else
             errors << { type: "unresolved_card", raw_name: entry.raw_name, line_number: entry.line_number,
-                        message: "Unknown card: \"#{entry.raw_name}\"" }
+                        message: "Carta desconhecida: \"#{entry.raw_name}\"" }
             nil
           end
         end

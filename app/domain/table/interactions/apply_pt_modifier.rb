@@ -11,8 +11,8 @@ module Table
 
       def modify(state, actor_id, instance_id, power, toughness)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:validation_error, "Only battlefield cards have power and toughness"] unless zone == "battlefield"
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:validation_error, "Só cartas no campo de batalha têm poder e resistência"] unless zone == "battlefield"
 
         holder = state.seat(holder_id)
         instance = holder.instances[instance_id]

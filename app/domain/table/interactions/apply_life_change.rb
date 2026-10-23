@@ -12,7 +12,7 @@ module Table
 
       def change_life(state, actor_id, target_id, delta)
         target = state.seat(target_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless target
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless target
 
         new_state = state.with_seat(target_id, target.with_life_total(target.life_total + delta))
         Success(append_log(new_state, seat_id: actor_id, event_type: "life_change",

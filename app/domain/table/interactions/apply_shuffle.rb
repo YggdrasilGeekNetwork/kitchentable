@@ -9,7 +9,7 @@ module Table
 
       def shuffle(state, seat_id)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         zones = seat_state.zones.merge("library" => seat_state.zones["library"].shuffle)
         new_state = state.with_seat(seat_id, seat_state.with_zones(zones)).without_peeks_into(seat_id)

@@ -10,8 +10,8 @@ module Table
 
       def end_reveal(state, actor_id, reveal_id)
         reveal = state.reveals.find { |r| r["id"] == reveal_id }
-        return Failure[:not_found, "Reveal not found"] unless reveal
-        return Failure[:forbidden, "Only whoever revealed can end the reveal"] unless reveal["by_seat_id"] == actor_id
+        return Failure[:not_found, "Revelação não encontrada"] unless reveal
+        return Failure[:forbidden, "Só quem revelou pode encerrar a revelação"] unless reveal["by_seat_id"] == actor_id
 
         Success(state.with(reveals: state.reveals - [ reveal ]))
       end

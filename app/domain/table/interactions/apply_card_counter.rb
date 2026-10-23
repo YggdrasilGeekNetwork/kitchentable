@@ -6,7 +6,7 @@ module Table
 
       def call(table_slug:, seat_id:, card_instance_id:, key:, delta:)
         key = key.to_s.strip
-        return Failure[:validation_error, "Counter name must be 1-#{MAX_KEY_LENGTH} characters"] unless key.length.between?(1, MAX_KEY_LENGTH)
+        return Failure[:validation_error, "O nome do contador deve ter de 1 a #{MAX_KEY_LENGTH} caracteres"] unless key.length.between?(1, MAX_KEY_LENGTH)
 
         step apply(table_slug) { |state| adjust(state, seat_id.to_s, card_instance_id, key, delta.to_i) }
       end
@@ -15,9 +15,9 @@ module Table
 
       def adjust(state, actor_id, instance_id, key, delta)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
         unless Entities::SeatState::PUBLIC_ZONES.include?(zone)
-          return Failure[:validation_error, "Counters go on cards in public zones"]
+          return Failure[:validation_error, "Contadores só podem ir em cartas de zonas públicas"]
         end
 
         holder = state.seat(holder_id)

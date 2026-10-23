@@ -1,0 +1,98 @@
+# Deploys master to the DigitalOcean droplet, from GitHub's runners — never from a dev
+# machine. Idempotent: the same steps set up a brand-new droplet or update a running
+# one (bin/bootstrap-droplet and `kamal setup` both only do what's missing).
+# Setup and required variables/secrets: docs/deploy.md.
+name: Deploy
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+    inputs:
+      release_lock:
+        description: "Release a deploy lock left behind by an interrupted deploy"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.APP_DOMAIN && format('https://{0}', vars.APP_DOMAIN) || format('http://{0}', vars.DROPLET_IP) }}
+    env:
+      KAMAL_HOST: ${{ vars.DROPLET_IP }}
+      APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+      KAMAL_REGISTRY_USERNAME: ${{ github.actor }}
+      KAMAL_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    steps:
+      - name: Check deploy settings
+        env:
+          HAS_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY != '' }}
+        run: |
+          missing=()
+          [ -n "$KAMAL_HOST" ] || missing+=("variable DROPLET_IP")
+          [ "$HAS_SSH_KEY" = "true" ] || missing+=("secret DROPLET_SSH_KEY")
+          [ -n "$SECRET_KEY_BASE" ] || missing+=("secret SECRET_KEY_BASE")
+          [ -n "$POSTGRES_PASSWORD" ] || missing+=("secret POSTGRES_PASSWORD")
+          if ((${#missing[@]})); then
+            printf '::error::Missing %s (see docs/deploy.md)\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Image name
+        # GHCR needs lowercase names; the repository owner may not be.
+        run: echo "KAMAL_IMAGE=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DROPLET_SSH_KEY }}
+
+      - name: Trust the droplet's SSH host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -t ed25519 -H "$KAMAL_HOST" >> ~/.ssh/known_hosts
+
+      - name: Check the domain points at the droplet
+        # Let's Encrypt can only issue the certificate once DNS resolves to the droplet.
+        if: env.APP_DOMAIN != ''
+        run: |
+          resolved=$(dig +short A "$APP_DOMAIN" | tail -n1)
+          if [ "$resolved" != "$KAMAL_HOST" ]; then
+            echo "::error::$APP_DOMAIN resolves to '${resolved:-nothing}', not $KAMAL_HOST — add an A record for it (docs/deploy.md)"
+            exit 1
+          fi
+
+      - name: Prepare the droplet
+        run: ssh "root@$KAMAL_HOST" 'bash -s' < bin/bootstrap-droplet
+
+      - name: Release a stale deploy lock
+        if: inputs.release_lock
+        run: bundle exec kamal lock release
+
+      - name: Deploy
+        # Installs Docker if missing, boots Postgres/Redis/kamal-proxy unless already
+        # there, then builds, pushes and rolls out the app with zero downtime.
+        run: bundle exec kamal setup

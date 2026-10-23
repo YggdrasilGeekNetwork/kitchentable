@@ -15,8 +15,8 @@ module Table
 
       def mulligan(state, seat_id)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
-        return Failure[:validation_error, "You already kept your hand"] if seat_state.hand_kept
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
+        return Failure[:validation_error, "Você já manteve a sua mão"] if seat_state.hand_kept
 
         library = (seat_state.zones["hand"] + seat_state.zones["library"]).shuffle
         hand = library.shift(HAND_SIZE)

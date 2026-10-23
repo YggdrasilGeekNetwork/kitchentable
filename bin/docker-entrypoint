@@ -12,7 +12,11 @@ if [ "${@: -2:1}" == "./bin/rails" ] && [ "${@: -1:1}" == "server" ]; then
   # so self-hosting only needs one DATABASE_URL — but that means db:prepare does NOT
   # cascade into the cache/queue roles. db:prepare_solid loads their schemas only when
   # their tables are missing (reloading them would wipe queued jobs on every deploy).
-  ./bin/rails db:prepare db:prepare_solid db:seed
+  # It runs before db:prepare so the Solid Queue tables exist when the seeds enqueue
+  # the first card catalog sync. Loading those schemas also creates schema_migrations,
+  # so db:prepare then sees an initialized database and skips seeding: db:seed runs
+  # explicitly, and only enqueues the sync while the catalog is still empty.
+  ./bin/rails db:create db:prepare_solid db:prepare db:seed
 fi
 
 exec "${@}"

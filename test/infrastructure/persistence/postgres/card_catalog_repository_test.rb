@@ -159,4 +159,11 @@ class CardCatalogRepositoryTest < ActiveSupport::TestCase
   test "deck tokens: cards that make nothing suggest nothing" do
     assert_empty @repo.deck_tokens([ create_card("Sol Ring").id ])
   end
+
+  test "the catalog sync's upsert stays part of the public port" do
+    @repo.upsert_bulk([ { scryfall_oracle_id: SecureRandom.uuid, name: "Opt", name_normalized: "opt",
+                          front_face_name_normalized: "opt", created_at: Time.current, updated_at: Time.current } ])
+
+    assert Card.exists?(name: "Opt")
+  end
 end

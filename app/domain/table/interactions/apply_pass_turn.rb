@@ -7,7 +7,7 @@ module Table
     class ApplyPassTurn < BaseGameMutation
       def call(table_slug:, seat_id:)
         table = table_repo.find_by_slug(table_slug)
-        return Failure[:not_found, "Table not found"] unless table
+        return Failure[:not_found, "Mesa não encontrada"] unless table
 
         order = table_repo.seats_for(table).sort_by(&:seat_number).map { |s| s.id.to_s }
         step apply(table_slug) { |state| pass(state, seat_id.to_s, order) }
@@ -17,9 +17,9 @@ module Table
 
       def pass(state, actor_id, order)
         playing = order.select { |id| state.seat(id) }
-        return Failure[:not_found, "Nobody has been dealt in yet"] if playing.empty?
+        return Failure[:not_found, "Ninguém recebeu cartas ainda"] if playing.empty?
         if playing.include?(state.active_seat_id) && state.active_seat_id != actor_id
-          return Failure[:forbidden, "Only the player whose turn it is can pass it"]
+          return Failure[:forbidden, "Só quem está na vez pode passar o turno"]
         end
 
         current = playing.index(state.active_seat_id) || -1

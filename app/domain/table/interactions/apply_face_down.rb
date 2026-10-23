@@ -11,8 +11,8 @@ module Table
 
       def turn(state, actor_id, instance_id, face_down)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:validation_error, "Only battlefield cards can be turned face down"] unless zone == "battlefield"
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:validation_error, "Só cartas no campo de batalha podem ser viradas para baixo"] unless zone == "battlefield"
 
         holder = state.seat(holder_id)
         instance = holder.instances[instance_id].with(face_down: face_down)

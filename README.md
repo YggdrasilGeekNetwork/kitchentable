@@ -8,6 +8,9 @@ model as Cockatrice/Untap.in/SpellTable.
 
 ## Deploy your own
 
+Production runs on a DigitalOcean droplet, deployed by GitHub Actions with Kamal on
+every push to `master` — see [docs/deploy.md](docs/deploy.md).
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 
 Or self-host with Docker Compose:

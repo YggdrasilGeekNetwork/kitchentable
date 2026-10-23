@@ -42,3 +42,7 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# Deploy tooling, not needed inside the image.
+/.kamal/
+/.github/

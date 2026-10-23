@@ -9,7 +9,7 @@ module Table
 
       def call(table_slug:, seat_id:, sides:)
         sides = sides.to_i
-        return Failure[:validation_error, "Dice need 2-1000 sides"] unless sides.between?(2, 1000)
+        return Failure[:validation_error, "O dado precisa ter de 2 a 1000 lados"] unless sides.between?(2, 1000)
 
         step apply(table_slug) { |state| roll(state, seat_id.to_s, sides) }
       end

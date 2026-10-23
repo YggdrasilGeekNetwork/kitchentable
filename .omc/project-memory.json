@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1791382335152,
+  "lastScanned": 1791835157409,
   "projectRoot": "/home/luan/kitchentable",
   "techStack": {
     "languages": [
@@ -36,6 +36,7 @@
     "mainDirectories": [
       "app",
       "bin",
+      "docs",
       "lib",
       "public",
       "test"
@@ -48,40 +49,40 @@
       "path": "app",
       "purpose": "Application code",
       "fileCount": 0,
-      "lastAccessed": 1791382335146,
+      "lastAccessed": 1791835157402,
       "keyFiles": []
     },
     "bin": {
       "path": "bin",
       "purpose": "Executable scripts",
-      "fileCount": 10,
-      "lastAccessed": 1791382335148,
+      "fileCount": 11,
+      "lastAccessed": 1791835157403,
       "keyFiles": [
+        "bootstrap-droplet",
         "brakeman",
         "dev",
         "docker-entrypoint",
-        "importmap",
-        "jobs"
+        "importmap"
       ]
     },
     "config": {
       "path": "config",
       "purpose": "Configuration files",
-      "fileCount": 13,
-      "lastAccessed": 1791382335148,
+      "fileCount": 15,
+      "lastAccessed": 1791835157403,
       "keyFiles": [
         "application.rb",
         "boot.rb",
+        "brakeman.ignore",
         "cable.yml",
-        "cache.yml",
-        "credentials.yml.enc"
+        "cache.yml"
       ]
     },
     "db": {
       "path": "db",
       "purpose": null,
       "fileCount": 4,
-      "lastAccessed": 1791382335148,
+      "lastAccessed": 1791835157404,
       "keyFiles": [
         "cache_schema.rb",
         "queue_schema.rb",
@@ -89,20 +90,30 @@
         "seeds.rb"
       ]
     },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1791835157404,
+      "keyFiles": [
+        "deploy.md"
+      ]
+    },
     "lib": {
       "path": "lib",
       "purpose": "Library code",
       "fileCount": 0,
-      "lastAccessed": 1791382335149,
+      "lastAccessed": 1791835157404,
       "keyFiles": []
     },
     "log": {
       "path": "log",
       "purpose": null,
-      "fileCount": 3,
-      "lastAccessed": 1791382335149,
+      "fileCount": 4,
+      "lastAccessed": 1791835157404,
       "keyFiles": [
         "development.log",
+        "development.log.0",
         "test.log"
       ]
     },
@@ -110,7 +121,7 @@
       "path": "public",
       "purpose": "Public files",
       "fileCount": 8,
-      "lastAccessed": 1791382335149,
+      "lastAccessed": 1791835157404,
       "keyFiles": [
         "400.html",
         "404.html",
@@ -123,14 +134,14 @@
       "path": "script",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1791382335149,
+      "lastAccessed": 1791835157405,
       "keyFiles": []
     },
     "test": {
       "path": "test",
       "purpose": "Test files",
       "fileCount": 2,
-      "lastAccessed": 1791382335149,
+      "lastAccessed": 1791835157405,
       "keyFiles": [
         "application_system_test_case.rb",
         "test_helper.rb"
@@ -140,7 +151,7 @@
       "path": "tmp",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1791382335150,
+      "lastAccessed": 1791835157405,
       "keyFiles": [
         "restart.txt"
       ]
@@ -149,32 +160,32 @@
       "path": "vendor",
       "purpose": "Third-party code",
       "fileCount": 1,
-      "lastAccessed": 1791382335150,
+      "lastAccessed": 1791835157406,
       "keyFiles": []
     },
     "app/assets": {
       "path": "app/assets",
       "purpose": "Static assets",
       "fileCount": 0,
-      "lastAccessed": 1791382335150,
+      "lastAccessed": 1791835157406,
       "keyFiles": []
     },
     "app/controllers": {
       "path": "app/controllers",
       "purpose": "Controllers",
-      "fileCount": 4,
-      "lastAccessed": 1791382335150,
+      "fileCount": 5,
+      "lastAccessed": 1791835157406,
       "keyFiles": [
         "application_controller.rb",
-        "decklists_controller.rb",
-        "seats_controller.rb"
+        "cards_controller.rb",
+        "decklists_controller.rb"
       ]
     },
     "app/helpers": {
       "path": "app/helpers",
       "purpose": "Helper functions",
       "fileCount": 1,
-      "lastAccessed": 1791382335150,
+      "lastAccessed": 1791835157406,
       "keyFiles": [
         "application_helper.rb"
       ]
@@ -183,7 +194,7 @@
       "path": "app/models",
       "purpose": "Data models",
       "fileCount": 4,
-      "lastAccessed": 1791382335150,
+      "lastAccessed": 1791835157406,
       "keyFiles": [
         "application_record.rb",
         "card.rb",
@@ -194,14 +205,14 @@
       "path": "test/controllers",
       "purpose": "Controllers",
       "fileCount": 1,
-      "lastAccessed": 1791382335151,
+      "lastAccessed": 1791835157408,
       "keyFiles": []
     },
     "test/fixtures": {
       "path": "test/fixtures",
       "purpose": "Test fixtures",
       "fileCount": 3,
-      "lastAccessed": 1791382335151,
+      "lastAccessed": 1791835157408,
       "keyFiles": [
         "cards.yml",
         "game_tables.yml",
@@ -212,18 +223,16 @@
       "path": "test/helpers",
       "purpose": "Helper functions",
       "fileCount": 1,
-      "lastAccessed": 1791382335151,
+      "lastAccessed": 1791835157408,
       "keyFiles": []
     },
-    "test/models": {
-      "path": "test/models",
-      "purpose": "Data models",
-      "fileCount": 4,
-      "lastAccessed": 1791382335151,
+    "test/lib": {
+      "path": "test/lib",
+      "purpose": "Library code",
+      "fileCount": 1,
+      "lastAccessed": 1791835157408,
       "keyFiles": [
-        "card_test.rb",
-        "game_table_test.rb",
-        "seat_test.rb"
+        "prepare_solid_task_test.rb"
       ]
     }
   },

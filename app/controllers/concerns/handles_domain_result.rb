@@ -27,14 +27,26 @@ module HandlesDomainResult
     end
   end
 
-  def summarize_errors(errors)
+  def summarize_errors(errors) = error_messages(errors).join("; ")
+
+  # One readable line per problem — a deck can fail on several cards at once.
+  def failure_messages(result)
+    _tag, payload = result.failure
+    payload.is_a?(String) ? [ payload ] : error_messages(payload)
+  end
+
+  FIELD_LABELS = {
+    display_name: "Nome", host_display_name: "Nome", name: "Nome da mesa", format: "Formato", max_seats: "Assentos"
+  }.freeze
+
+  def error_messages(errors)
     case errors
     when Array
-      errors.map { |e| e.is_a?(Hash) ? e[:message] || e["message"] : e.to_s }.join("; ")
+      errors.map { |e| e.is_a?(Hash) ? e[:message] || e["message"] : e.to_s }
     when Hash
-      errors.map { |field, messages| "#{field}: #{Array(messages).join(', ')}" }.join("; ")
+      errors.map { |field, messages| "#{FIELD_LABELS.fetch(field.to_sym, field)}: #{Array(messages).join(', ')}" }
     else
-      errors.to_s
+      [ errors.to_s ]
     end
   end
 end

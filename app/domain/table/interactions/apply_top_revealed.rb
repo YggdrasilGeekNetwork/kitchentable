@@ -11,7 +11,7 @@ module Table
 
       def toggle(state, seat_id, revealed)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         new_state = state.with_seat(seat_id, seat_state.with(top_revealed: revealed))
         Success(append_log(new_state, seat_id: seat_id, event_type: "top_revealed", payload: { "revealed" => revealed }))

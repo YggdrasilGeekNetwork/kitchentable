@@ -10,7 +10,7 @@ module Table
 
       def cure(state, instance_id)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id && zone == "battlefield"
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id && zone == "battlefield"
 
         holder = state.seat(holder_id)
         Success(state.with_seat(holder_id, holder.with_instance(instance_id, holder.instances[instance_id].with(sick: false))))

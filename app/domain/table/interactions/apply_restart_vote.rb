@@ -17,7 +17,7 @@ module Table
 
       def call(table_slug:, seat_id:, answer:)
         answer = answer.to_s
-        return Failure[:validation_error, "Unknown answer: #{answer}"] unless ANSWERS.include?(answer)
+        return Failure[:validation_error, "Resposta desconhecida: #{answer}"] unless ANSWERS.include?(answer)
 
         @format = table_repo.find_by_slug(table_slug)&.format
         step apply(table_slug) { |state| vote(state, seat_id.to_s, answer) }
@@ -26,21 +26,21 @@ module Table
       private
 
       def vote(state, seat_id, answer)
-        return Failure[:forbidden, "Only players in the game can vote"] unless state.seat(seat_id)
+        return Failure[:forbidden, "Só jogadores na partida podem votar"] unless state.seat(seat_id)
 
         vote = state.restart_vote
         case answer
         when "request"
-          return Failure[:validation_error, "A restart was already requested"] if vote
+          return Failure[:validation_error, "Já há um pedido de reinício em andamento"] if vote
 
           vote = { "id" => SecureRandom.hex(4), "requested_by" => seat_id, "accepted" => [ seat_id ] }
           tally(append_log(state, seat_id: seat_id, event_type: "restart_requested"), vote)
         when "accept"
-          return Failure[:not_found, "No restart was requested"] unless vote
+          return Failure[:not_found, "Nenhum reinício foi pedido"] unless vote
 
           tally(state, vote.merge("accepted" => (vote["accepted"] | [ seat_id ])))
         when "decline"
-          return Failure[:not_found, "No restart was requested"] unless vote
+          return Failure[:not_found, "Nenhum reinício foi pedido"] unless vote
 
           Success(append_log(state.with(restart_vote: nil), seat_id: seat_id, event_type: "restart_declined"))
         end

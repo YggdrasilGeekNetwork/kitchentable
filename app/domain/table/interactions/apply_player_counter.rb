@@ -8,7 +8,7 @@ module Table
 
       def call(table_slug:, seat_id:, key:, delta: 0, target_seat_id: nil, remove: false)
         key = key.to_s.strip
-        return Failure[:validation_error, "Counter name must be 1-#{MAX_KEY_LENGTH} characters"] unless key.length.between?(1, MAX_KEY_LENGTH)
+        return Failure[:validation_error, "O nome do contador deve ter de 1 a #{MAX_KEY_LENGTH} caracteres"] unless key.length.between?(1, MAX_KEY_LENGTH)
 
         target_id = (target_seat_id.presence || seat_id).to_s
         step apply(table_slug) { |state| adjust(state, seat_id.to_s, target_id, key, delta.to_i, remove) }
@@ -18,7 +18,7 @@ module Table
 
       def adjust(state, actor_id, target_id, key, delta, remove)
         target = state.seat(target_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless target
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless target
 
         updated = remove ? target.without_counter(key) : target.with_counter(key, delta)
         new_state = state.with_seat(target_id, updated)

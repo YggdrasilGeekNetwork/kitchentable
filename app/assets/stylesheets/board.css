@@ -281,17 +281,88 @@ kbd { font-size: 10px; opacity: 0.7; margin-left: 6px; border: 1px solid current
 .kt-zoom img { width: 250px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); }
 .kt-zoom img.kt-zoom-other { width: 180px; opacity: 0.85; align-self: flex-end; }
 
-.kt-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 80; background: #5a2020; color: #ffe1e1; padding: 10px 16px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+/* Toasts stack bottom-center, newest last. */
+.kt-toasts { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 80; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+.kt-toast { display: flex; align-items: center; gap: 12px; max-width: min(560px, 90vw); background: #5a2020; color: #ffe1e1; padding: 10px 16px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.5); pointer-events: auto; cursor: pointer; }
+.kt-toast-floating { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 80; }
 .kt-toast-info { background: #1f4a31; color: #d5f5e1; }
+.kt-toast-chat { background: var(--kt-surface-2); color: var(--kt-text); border: 1px solid var(--kt-border); }
+.kt-toast-action { background: none; border: 1px solid currentColor; border-radius: 5px; color: inherit; font: inherit; font-weight: 600; padding: 2px 10px; cursor: pointer; }
+.kt-toast-action:hover { background: rgba(255,255,255,0.12); }
+
+/* Connection lost: a banner on top, the board dimmed and inert underneath. */
+.kt-connection { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 8px;
+  background: #3a2c17; border: 1px solid #c98a2b; color: #ffe8c2; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+.kt-offline .kt-play, .kt-offline .kt-topbar { opacity: 0.55; pointer-events: none; filter: grayscale(0.4); }
+.kt-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: kt-spin 0.8s linear infinite; }
+@keyframes kt-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .kt-spinner { animation: none; } .kt-card, .kt-perm { transition: none; } }
+
+.kt-badge-count { display: inline-grid; place-items: center; min-width: 17px; height: 17px; margin-left: 5px; padding: 0 4px; border-radius: 9px; background: var(--kt-accent); color: #fff; font-size: 11px; font-weight: 700; }
+
+/* Keyboard focus is always visible; mouse clicks don't draw rings. */
+.kt-body :focus-visible, .kt-page :focus-visible { outline: 2px solid #4fc3f7; outline-offset: 2px; }
+.kt-menu:focus { outline: none; }
+
+.kt-btn:disabled { opacity: 0.5; cursor: not-allowed; border-color: var(--kt-border); }
+.kt-btn-danger { background: var(--kt-danger); border-color: #b83c3c; color: #fff; }
+.kt-menu-item:disabled { opacity: 0.45; cursor: default; background: none; }
+.kt-link-inline { padding: 0; text-decoration: underline; color: var(--kt-text); }
+.kt-warning { margin: 6px 0; padding: 8px 10px; border-radius: 6px; background: #3a2c17; border: 1px solid #c98a2b; color: #ffe8c2; }
+
+/* Modal prompts (numbers, names, confirmations). */
+.kt-presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.kt-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.kt-shortcuts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; align-items: baseline; }
+.kt-shortcuts dt { text-align: right; }
+.kt-shortcuts dd { margin: 0; }
+.kt-shortcuts kbd { font-size: 12px; opacity: 1; margin: 0; padding: 1px 6px; }
+.kt-search-status { min-height: 1.2em; }
+
+/* Your own header above your battlefield, mirroring the opponents'. */
+.kt-mine-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 2px; min-height: 30px; }
+.kt-mine-header .kt-hint { white-space: nowrap; }
+
+/* Tapped permanents also get a corner mark: the tilt alone is hard to see on the
+   opponents' small cards. */
+.kt-perm.kt-tapped::after { content: "↻"; position: absolute; top: 2px; right: 3px; font-size: clamp(9px, calc(var(--kt-perm-h) * 0.18), 14px); line-height: 1;
+  color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; pointer-events: none; }
+
+/* The board needs room: below this width say so instead of drawing it broken. */
+.kt-small-screen { display: none; }
+@media (max-width: 899px) {
+  .kt-board > .kt-root, .kt-board > .kt-loading { display: none; }
+  .kt-small-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 100vh; padding: 24px; box-sizing: border-box; text-align: center; }
+}
 
 .kt-empty { margin: auto; text-align: center; }
 
 /* --- decklist dialog ----------------------------------------------------------- */
-.kt-dialog { background: var(--kt-surface); color: var(--kt-text); border: 1px solid var(--kt-border); border-radius: 10px; padding: 18px 20px; width: min(620px, 92vw); }
+/* margin: auto centers the modal <dialog>; Tailwind's preflight resets it to 0. */
+.kt-dialog { margin: auto; background: var(--kt-surface); color: var(--kt-text); border: 1px solid var(--kt-border); border-radius: 10px; padding: 18px 20px; width: min(620px, 92vw); }
 .kt-dialog::backdrop { background: rgba(10, 10, 12, 0.7); }
 .kt-form { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
 .kt-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--kt-muted); }
 .kt-field textarea, .kt-field input { padding: 8px; border-radius: 6px; border: 1px solid var(--kt-border); background: #1d1f22; color: var(--kt-text); font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.kt-field .kt-input { font: inherit; color: var(--kt-text); }
+.kt-field-hint { color: var(--kt-muted); font-size: 12px; min-height: 1.2em; }
+.kt-form-error { padding: 10px 12px; border-radius: 6px; background: #3b1c1c; border: 1px solid var(--kt-danger); color: #ffd9d9; }
+.kt-form-error ul { margin: 6px 0 0; padding-left: 20px; max-height: 160px; overflow-y: auto; list-style: disc; }
+
+/* --- lobby (create / join a table) --------------------------------------------- */
+.kt-page { margin: 0; min-height: 100vh; background: var(--kt-bg); color: var(--kt-text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 14px; }
+.kt-lobby { max-width: 480px; margin: 0 auto; padding: 48px 20px; display: flex; flex-direction: column; gap: 16px; }
+.kt-lobby-brand { color: var(--kt-text); text-decoration: none; font-size: 18px; }
+.kt-panel { background: var(--kt-surface); border: 1px solid var(--kt-border); border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px; }
+.kt-panel h1 { margin: 0; font-size: 20px; }
+.kt-panel h2 { margin: 8px 0 0; font-size: 15px; }
+.kt-panel p { margin: 0; line-height: 1.5; }
+.kt-panel select.kt-input { appearance: auto; }
+.kt-optional { font-size: 11px; color: var(--kt-muted); opacity: 0.8; }
+.kt-notice { padding: 10px 12px; border-radius: 6px; background: #1f4a31; color: #d5f5e1; }
+.kt-notice-alert { background: #3b1c1c; color: #ffd9d9; border: 1px solid var(--kt-danger); }
+.kt-seat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.kt-seat-list li { display: flex; align-items: center; gap: 8px; }
 
 /* --- submenus, modals, search, details ----------------------------------------- */
 .kt-menu-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; }

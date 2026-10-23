@@ -17,12 +17,12 @@ module Table
 
         unless commander_rows.size.between?(1, MAX_COMMANDERS)
           errors << { type: "commander_count",
-                      message: "Commander decks need 1 or #{MAX_COMMANDERS} commanders (found #{commander_rows.size})" }
+                      message: "Decks de Commander precisam de 1 ou #{MAX_COMMANDERS} comandantes (encontrados: #{commander_rows.size})" }
         end
 
         total = resolved.sum { |r| r[:entry].quantity }
         unless total == DECK_SIZE
-          errors << { type: "deck_size", message: "Commander decks must contain exactly #{DECK_SIZE} cards (found #{total})" }
+          errors << { type: "deck_size", message: "Decks de Commander precisam ter exatamente #{DECK_SIZE} cartas, contando o comandante (encontradas: #{total})" }
         end
 
         errors.concat(singleton_violations(resolved))
@@ -49,7 +49,7 @@ module Table
           .select { |_id, rows| rows.sum { |r| r[:entry].quantity } > 1 }
           .map { |_id, rows|
             { type: "singleton", card_name: rows.first[:card].name,
-              message: "Only 1 copy of #{rows.first[:card].name} allowed in Commander" }
+              message: "Só 1 cópia de #{rows.first[:card].name} é permitida em Commander" }
           }
       end
 
@@ -61,7 +61,7 @@ module Table
           next if (card_identity - commander_identity).empty?
 
           { type: "color_identity", card_name: r[:card].name,
-            message: "#{r[:card].name} (#{card_identity.join}) is outside your commander's color identity (#{commander_identity.join})" }
+            message: "#{r[:card].name} (#{card_identity.join}) está fora da identidade de cor do seu comandante (#{commander_identity.join})" }
         end
       end
 
@@ -69,7 +69,7 @@ module Table
         resolved.filter_map do |r|
           next if @catalog.legal?(card: r[:card], format: "commander")
 
-          { type: "legality", card_name: r[:card].name, message: "#{r[:card].name} is banned in Commander" }
+          { type: "legality", card_name: r[:card].name, message: "#{r[:card].name} é banida em Commander" }
         end
       end
     end

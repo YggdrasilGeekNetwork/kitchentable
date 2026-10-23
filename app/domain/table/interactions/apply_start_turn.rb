@@ -13,12 +13,12 @@ module Table
 
       def start(state, seat_id, out_of_turn)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         my_turn = state.active_seat_id == seat_id
-        return Failure[:validation_error, "Your turn has already started"] if my_turn && state.turn_started
-        return Failure[:forbidden, "It's not your turn"] if !my_turn && !out_of_turn
-        return Failure[:forbidden, "The first player hasn't started the game yet"] if !my_turn && state.awaiting_first_turn?
+        return Failure[:validation_error, "Seu turno já começou"] if my_turn && state.turn_started
+        return Failure[:forbidden, "Não é a sua vez"] if !my_turn && !out_of_turn
+        return Failure[:forbidden, "O primeiro jogador ainda não começou a partida"] if !my_turn && state.awaiting_first_turn?
 
         new_seat_state, drew = begin_turn(seat_state)
         new_seat_state = new_seat_state.with(turns_taken: seat_state.turns_taken + 1)

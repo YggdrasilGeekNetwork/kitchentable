@@ -29,7 +29,7 @@ module Table
 
       def apply(table_slug)
         table = table_repo.find_by_slug(table_slug)
-        return Failure[:not_found, "Table not found"] unless table
+        return Failure[:not_found, "Mesa não encontrada"] unless table
 
         result = table_repo.with_lock(table) do
           yield(state_store.fetch(table_slug: table_slug)).fmap do |new_state|
@@ -46,7 +46,7 @@ module Table
 
       def find_seat_state(game_state, seat_id)
         seat_state = game_state.seat(seat_id)
-        seat_state ? Success(seat_state) : Failure[:not_found, "Seat has no game state yet"]
+        seat_state ? Success(seat_state) : Failure[:not_found, "Esse jogador ainda não enviou um deck"]
       end
 
       def append_log(state, seat_id:, event_type:, payload: {})

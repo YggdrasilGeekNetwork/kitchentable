@@ -43,10 +43,13 @@ dry-operation pitfall below.
 - `Table::Views::TableView` is the **only** place hidden information is redacted
   (hands, libraries, face-down cards, peeks, reveals). New state that some players
   mustn't see goes through it, with a test in `test/domain/table/views/`.
-- A seat is identified by its secret `token` (`?seat=` in the table URL, the
-  `seat_for_<slug>` cookie, and `TableChannel`'s `seat_token` param) — never by its
-  numeric id, which anyone could edit. Invite links are the bare table URL; never
-  share `window.location` from the board.
+- Inside the domain a seat is identified by its numeric id (`seat_id`), but a
+  request only gets to act as a seat after proving it holds that seat's secret
+  `token` (`?seat=` in the table URL, the `seat_for_<slug>` cookie, or
+  `TableChannel`'s `seat_token` param). Never trust a numeric seat id from the client
+  on its own — anyone could edit it: controllers derive the seat from
+  `SeatSession#seat_from_session`, the channel checks id + token on subscribe.
+  Invite links are the bare table URL; never share `window.location` from the board.
 - Interaction tests use `GameTestHelper` (`test/support/game_test_helper.rb`):
   `build_game(seats: { "1" => seat_state(hand: { "c1" => card(10) }) })` then
   `play(Klass, seat_id: "1", ...)`.
@@ -101,9 +104,19 @@ and raises `ArgumentError: wrong number of arguments (given 0, expected 1)`. Alw
 physical Postgres database (one `DATABASE_URL`, just different `migrations_paths`) so
 self-hosting only needs one Postgres instance. Confirmed by testing: `bin/rails
 db:prepare` only prepares the `primary` role in that setup — it silently does **not**
-cascade into `cache`/`queue`. Always follow it with
-`bin/rails db:schema:load:cache db:schema:load:queue` (both are no-ops if already
-loaded — safe to run on every boot). `bin/docker-entrypoint` already does this.
+cascade into `cache`/`queue`. Use `bin/rails db:prepare_solid` (lib/tasks/solid.rake),
+which loads their schemas **only where their tables are missing** — never
+`db:schema:load:cache`/`:queue` on boot: those recreate the tables (`force: :cascade`,
+wiping queued jobs and the cache) and refuse to run in production anyway
+(`ProtectedEnvironmentError`). `bin/docker-entrypoint` runs
+`db:create db:prepare_solid db:prepare db:seed`, in that order: the Solid Queue tables
+must exist before the seeds enqueue the first catalog sync, and loading them creates
+`schema_migrations`, which makes `db:prepare` skip seeding — hence the explicit
+(idempotent) `db:seed`.
+
+Deploys run only from GitHub Actions (`.github/workflows/deploy.yml`, Kamal) — see
+docs/deploy.md. They must stay idempotent: `bin/bootstrap-droplet` and `kamal setup`
+run on every deploy and only do what's missing.
 
 That shared-database shape is **production-only**. Development/test declare just
 `primary` — don't add `cache`/`queue` roles back there. With all three roles on one

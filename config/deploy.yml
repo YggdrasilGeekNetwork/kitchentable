@@ -1,0 +1,86 @@
+# Kamal deploy to a single DigitalOcean droplet: the app (Rails + Thruster, with the
+# Solid Queue worker inside Puma), Postgres and Redis, all on the same host.
+#
+# Run by .github/workflows/deploy.yml — never from a dev machine. Values come from the
+# workflow's environment (GitHub repository variables/secrets); see docs/deploy.md.
+service: kitchentable
+
+# ghcr.io/<owner>/<repo>, lowercased by the workflow.
+image: <%= ENV.fetch("KAMAL_IMAGE") %>
+
+servers:
+  web:
+    - <%= ENV.fetch("KAMAL_HOST") %>
+
+# kamal-proxy in front of the app: zero-downtime deploys, health-checked on /up.
+# With APP_DOMAIN set (its DNS A record pointing at the droplet), the proxy serves only
+# that domain over HTTPS with a Let's Encrypt certificate it renews itself, redirecting
+# HTTP to HTTPS. Without it, the app answers plain HTTP on the droplet's IP.
+<% domain = ENV["APP_DOMAIN"].to_s.strip.presence %>
+proxy:
+  app_port: 80
+<% if domain %>
+  host: <%= domain %>
+  ssl: true
+<% else %>
+  ssl: false
+<% end %>
+  healthcheck:
+    path: /up
+    timeout: 5
+
+registry:
+  server: ghcr.io
+  username: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME") %>
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  cache:
+    type: registry
+    options: mode=max
+
+env:
+  clear:
+    RAILS_ENV: production
+    RAILS_FORCE_SSL: "<%= domain ? "true" : "false" %>"
+    # The Solid Queue supervisor runs inside Puma: one container instead of two on a
+    # small droplet.
+    SOLID_QUEUE_IN_PUMA: "true"
+    WEB_CONCURRENCY: 1
+    RAILS_MAX_THREADS: 5
+    REDIS_URL: redis://kitchentable-redis:6379/0
+    ENABLE_AV: "false"
+    ENABLE_OVERLAY: "false"
+  secret:
+    - SECRET_KEY_BASE
+    - DATABASE_URL
+
+# Postgres and Redis on the same droplet, reachable only on Kamal's private Docker
+# network (no published ports), with their data in /root/kitchentable-*/data.
+accessories:
+  db:
+    image: postgres:16-alpine
+    host: <%= ENV.fetch("KAMAL_HOST") %>
+    env:
+      clear:
+        POSTGRES_USER: kitchentable
+        POSTGRES_DB: kitchentable_production
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    host: <%= ENV.fetch("KAMAL_HOST") %>
+    directories:
+      - data:/data
+
+# A first boot on an empty database also enqueues the Scryfall catalog sync; give the
+# app time to migrate before the health check gives up.
+deploy_timeout: 180
+
+ssh:
+  user: root

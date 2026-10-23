@@ -8,7 +8,7 @@ module Table
 
       def call(table_slug:, seat_id:, placement:)
         placement = placement.to_s
-        return Failure[:validation_error, "Place them on top or bottom"] unless PLACEMENTS.include?(placement)
+        return Failure[:validation_error, "Coloque-as no topo ou no fundo"] unless PLACEMENTS.include?(placement)
 
         step apply(table_slug) { |state| place(state, seat_id.to_s, placement) }
       end
@@ -17,7 +17,7 @@ module Table
 
       def place(state, actor_id, placement)
         peek = state.seat(actor_id)&.peek
-        return Failure[:not_found, "Nothing revealed from a library"] unless peek
+        return Failure[:not_found, "Nenhuma carta do grimório está sendo olhada"] unless peek
 
         owner_id = peek["seat_id"].to_s
         owner = state.seat(owner_id)

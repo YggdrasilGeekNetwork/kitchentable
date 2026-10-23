@@ -11,8 +11,8 @@ module Table
 
       def remove(state, actor_id, instance_id)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:forbidden, "You can't remove that card"] unless touchable?(state, actor_id, holder_id, zone, instance_id)
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:forbidden, "Você não pode remover essa carta"] unless touchable?(state, actor_id, holder_id, zone, instance_id)
 
         instance = state.seat(holder_id).instances[instance_id]
         new_state = state.with_seat(holder_id, state.seat(holder_id).without_card(instance_id))

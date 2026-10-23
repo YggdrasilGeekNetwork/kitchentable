@@ -69,7 +69,7 @@ class TableChannelTest < ActionCable::Channel::TestCase
 
     perform :move_card, card_instance_id: "does_not_exist", to_zone: "hand"
 
-    assert_equal({ "type" => "error", "error" => "not_found", "message" => "Card instance not found" }, transmissions.last)
+    assert_equal({ "type" => "error", "error" => "not_found", "message" => "Carta não encontrada — ela pode ter acabado de mudar de zona" }, transmissions.last)
     assert_empty broadcasts(seat_stream(@other_seat))
   end
 

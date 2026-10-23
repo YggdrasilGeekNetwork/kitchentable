@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Prepares a DigitalOcean droplet (Ubuntu 24.04) to run the app. Idempotent: every step
+# checks before acting, so the deploy workflow runs it on every deploy — a brand-new
+# droplet gets set up, an existing one is left as it is.
+#
+# Runs on the droplet as root, piped over SSH: ssh root@<ip> 'bash -s' < bin/bootstrap-droplet
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+step() { echo "--> $*"; }
+
+# 2 GB of swap: small droplets run Postgres, Redis and the app side by side.
+if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+  step "Adding 2 GB of swap"
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+missing=()
+for pkg in ufw unattended-upgrades fail2ban; do
+  dpkg -s "$pkg" >/dev/null 2>&1 || missing+=("$pkg")
+done
+if ((${#missing[@]})); then
+  step "Installing ${missing[*]}"
+  apt-get update -qq
+  apt-get install -y -qq "${missing[@]}" >/dev/null
+fi
+
+# Security updates install themselves.
+if [ ! -f /etc/apt/apt.conf.d/20auto-upgrades ]; then
+  step "Enabling automatic security updates"
+  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades
+fi
+
+# Only SSH and HTTP(S) in. Postgres/Redis publish no ports, so Docker's own iptables
+# rules (which bypass ufw) don't expose them.
+for rule in OpenSSH 80/tcp 443/tcp; do
+  ufw status | grep -q "^${rule%%/*}.*ALLOW" || { step "Allowing $rule"; ufw allow "$rule" >/dev/null; }
+done
+ufw status | grep -q "Status: active" || { step "Enabling the firewall"; ufw --force enable >/dev/null; }
+
+if ! command -v docker >/dev/null; then
+  step "Installing Docker"
+  curl -fsSL https://get.docker.com | sh >/dev/null
+fi
+
+# Kamal skips accessories whose container already exists; make sure a stopped one
+# (after a manual `docker stop`) is running again.
+stopped=$(docker ps -aq --filter "status=exited" --filter "status=created" --filter "name=^kitchentable-(db|redis)$")
+if [ -n "$stopped" ]; then
+  step "Starting stopped database containers"
+  docker start $stopped >/dev/null
+fi
+
+echo "--> Droplet ready"

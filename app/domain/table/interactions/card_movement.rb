@@ -21,12 +21,12 @@ module Table
 
       def move_card(state, actor_id, instance_id, to_zone, to_position, to_seat_id, x, y)
         holder_id, from_zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:forbidden, "You can't move that card"] unless touchable?(state, actor_id, holder_id, from_zone, instance_id)
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:forbidden, "Você não pode mover essa carta"] unless touchable?(state, actor_id, holder_id, from_zone, instance_id)
 
         instance = state.seat(holder_id).instances[instance_id]
         destination_id = to_zone == "battlefield" ? (to_seat_id || actor_id) : (instance.owner_seat_id || holder_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless state.seat(destination_id)
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless state.seat(destination_id)
 
         repositioning = from_zone == "battlefield" && to_zone == "battlefield" && holder_id == destination_id
         moved = from_zone == "battlefield" && to_zone != "battlefield" ? instance.leaving_battlefield : instance

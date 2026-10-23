@@ -12,10 +12,10 @@ module Table
       def call(table_slug:, seat_id:, count: nil, target_seat_id: nil, search: false)
         target_id = (target_seat_id.presence || seat_id).to_s
         if search
-          return Failure[:forbidden, "You can only search your own library"] unless target_id == seat_id.to_s
+          return Failure[:forbidden, "Você só pode buscar no seu próprio grimório"] unless target_id == seat_id.to_s
         else
           count = count.to_i
-          return Failure[:validation_error, "Look at between 1 and #{MAX_COUNT} cards"] unless count.between?(1, MAX_COUNT)
+          return Failure[:validation_error, "Olhe de 1 a #{MAX_COUNT} cartas"] unless count.between?(1, MAX_COUNT)
         end
 
         step apply(table_slug) { |state| peek(state, seat_id.to_s, target_id, search ? nil : count) }
@@ -25,7 +25,7 @@ module Table
 
       def peek(state, actor_id, target_id, count)
         actor = state.seat(actor_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless actor && state.seat(target_id)
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless actor && state.seat(target_id)
 
         library = state.seat(target_id).zones["library"]
         ids = count ? library.first(count) : library

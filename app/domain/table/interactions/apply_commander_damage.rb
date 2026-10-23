@@ -8,7 +8,7 @@ module Table
 
       def call(table_slug:, seat_id:, commander_instance_id:, delta:, target_seat_id: nil)
         delta = delta.to_i
-        return Failure[:validation_error, "Damage must change by a non-zero amount"] if delta.zero?
+        return Failure[:validation_error, "O dano precisa mudar em pelo menos 1"] if delta.zero?
 
         target_id = (target_seat_id.presence || seat_id).to_s
         step apply(table_slug) { |state| damage(state, seat_id.to_s, target_id, commander_instance_id.to_s, delta) }
@@ -18,11 +18,11 @@ module Table
 
       def damage(state, actor_id, target_id, commander_id, delta)
         target = state.seat(target_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless target
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless target
 
         holder_id, = state.locate(commander_id)
         commander = holder_id && state.seat(holder_id).instances[commander_id]
-        return Failure[:validation_error, "That card isn't a commander"] unless commander&.commander
+        return Failure[:validation_error, "Essa carta não é um comandante"] unless commander&.commander
 
         current = target.commander_damage.fetch(commander_id, 0)
         applied = [ delta, -current ].max # can't go below zero damage

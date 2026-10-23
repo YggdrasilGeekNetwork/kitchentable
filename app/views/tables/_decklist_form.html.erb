@@ -1,11 +1,21 @@
 <%= form_with url: table_seat_decklist_path(table, seat_id), method: :post,
               class: "kt-form", data: { controller: "decklist-form" } do %>
-  <input type="hidden" name="seat_id" value="<%= seat_id %>">
   <input type="hidden" name="mtg_format" value="<%= table.format %>">
+  <% if @decklist_errors.present? %>
+    <div class="kt-form-error" role="alert">
+      <strong>Não foi possível usar este deck:</strong>
+      <ul>
+        <% @decklist_errors.each do |message| %>
+          <li><%= message %></li>
+        <% end %>
+      </ul>
+    </div>
+  <% end %>
   <label class="kt-field">
     Lista (texto)
-    <textarea name="raw_text" rows="12" placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;35 Island"
-              data-decklist-form-target="list" data-action="input->decklist-form#refreshCommanderOptions"><%= @raw_text %></textarea>
+    <textarea name="raw_text" rows="12" required placeholder="1 Sol Ring&#10;1 Arcane Signet&#10;35 Island"
+              data-decklist-form-target="list" data-action="input->decklist-form#refresh"><%= @raw_text %></textarea>
+    <small class="kt-field-hint" data-decklist-form-target="summary" aria-live="polite"></small>
   </label>
   <% if table.format == "commander" %>
     <label class="kt-field">
@@ -19,5 +29,6 @@
     </label>
     <datalist id="commander-options" data-decklist-form-target="commanderOptions"></datalist>
   <% end %>
-  <button type="submit" class="kt-btn kt-btn-primary">Enviar deck</button>
+  <button type="submit" class="kt-btn kt-btn-primary" data-board-target="decklistSubmit"
+          data-turbo-submits-with="Enviando…">Enviar deck</button>
 <% end %>

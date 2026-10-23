@@ -1,34 +1,60 @@
 <% if @seat_id.blank? %>
-  <div class="max-w-2xl mx-auto mt-10 p-6">
-    <h1 class="text-xl font-semibold">Mesa <%= @table.name.presence || @table.slug %></h1>
-    <p class="text-sm text-gray-500">Formato: <%= @table.format %> · Código: <code><%= @table.slug %></code></p>
+  <% content_for :title, table_title(@table) %>
+  <% seats = @table.seats.order(:seat_number).to_a %>
+  <% free = @table.max_seats - seats.size %>
+  <section class="kt-panel">
+    <h1><%= table_title(@table) %></h1>
+    <p class="kt-muted"><%= format_label(@table.format) %> · <%= seats.size %> de <%= @table.max_seats %> lugares ocupados</p>
 
-    <h2 class="mt-6 font-medium">Entrar na mesa</h2>
-    <%= form_with url: table_seats_path(@table), method: :post, class: "flex flex-col gap-3 mt-2" do %>
-      <input type="text" name="display_name" placeholder="Seu nome" required class="border rounded w-full p-2">
-      <button type="submit" class="bg-black text-white rounded p-2">Entrar</button>
+    <% if seats.any? %>
+      <ul class="kt-seat-list">
+        <% seats.each do |seat| %>
+          <li><span class="kt-seat-number"><%= seat.seat_number %></span> <%= seat.display_name %></li>
+        <% end %>
+      </ul>
     <% end %>
-  </div>
+
+    <% if free.positive? %>
+      <h2>Entrar na mesa</h2>
+      <%= form_with url: table_seats_path(@table), method: :post, class: "kt-form" do %>
+        <label class="kt-field">
+          Seu nome
+          <input type="text" name="display_name" required maxlength="40" autocomplete="nickname" autofocus class="kt-input">
+        </label>
+        <button type="submit" class="kt-btn kt-btn-primary" data-turbo-submits-with="Entrando…">Entrar</button>
+      <% end %>
+    <% else %>
+      <p class="kt-notice kt-notice-alert" role="status">Esta mesa está cheia. Se você já tinha um lugar, abra o link do seu assento (o endereço que aparecia no seu navegador durante o jogo).</p>
+    <% end %>
+  </section>
 <% else %>
-  <% content_for :title, "Mesa #{@table.name.presence || @table.slug}" %>
+  <% content_for :title, table_title(@table) %>
   <div class="kt-board" data-controller="board"
        data-board-table-slug-value="<%= @table.slug %>"
        data-board-seat-id-value="<%= @seat_id %>"
        data-board-seat-token-value="<%= @seat_token %>"
        data-board-invite-url-value="<%= table_url(@table) %>"
        data-board-format-value="<%= @table.format %>"
-       data-board-decklist-error-value="<%= flash.now[:alert].present? || flash[:alert].present? %>">
+       data-board-max-seats-value="<%= @table.max_seats %>"
+       data-board-decklist-error-value="<%= @decklist_errors.present? %>">
     <% flash.each do |type, message| %>
-      <div class="kt-flash kt-flash-<%= type %>" data-board-target="flash"><%= message %></div>
+      <div class="kt-flash kt-flash-<%= type %>" role="status" data-board-target="flash"><%= message %></div>
     <% end %>
-    <div class="kt-loading" data-board-target="root">Conectando à mesa <code><%= @table.slug %></code>…</div>
+    <div class="kt-loading" data-board-target="root" role="status">Conectando à mesa <code><%= @table.slug %></code>…</div>
+    <div class="kt-small-screen" role="note">
+      <p>O tabuleiro precisa de uma tela com pelo menos 900px de largura.</p>
+      <p class="kt-muted">Gire o tablet, aumente a janela ou use um computador.</p>
+    </div>
 
-    <dialog class="kt-dialog kt-decklist-dialog" data-board-target="decklistDialog">
+    <dialog class="kt-dialog kt-decklist-dialog" data-board-target="decklistDialog" aria-labelledby="kt-decklist-title">
       <header class="kt-dialog-header">
-        <h2>Seu deck · <%= @table.format.capitalize %></h2>
+        <h2 id="kt-decklist-title">Seu deck · <%= format_label(@table.format) %></h2>
         <button type="button" class="kt-icon-btn" data-action="board#closeDecklist" aria-label="Fechar">✕</button>
       </header>
-      <p class="kt-muted">Cole a lista em texto (exportação do Moxfield, Archidekt, Arena…). Enviar de novo reinicia o seu jogo.</p>
+      <p class="kt-muted">Cole a lista em texto (exportação do Moxfield, Archidekt, Arena…).</p>
+      <p class="kt-warning" data-board-target="decklistWarning" hidden>
+        Você já está jogando: enviar um deck agora <strong>reinicia o seu jogo</strong> (mão, campo e grimório voltam ao começo).
+      </p>
       <%= render "tables/decklist_form", table: @table, seat_id: @seat_id %>
     </dialog>
   </div>

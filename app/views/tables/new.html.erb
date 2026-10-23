@@ -1,30 +1,35 @@
-<div class="max-w-md mx-auto mt-16 p-6">
-  <h1 class="text-xl font-semibold mb-4">Criar mesa</h1>
+<section class="kt-panel">
+  <h1>Criar mesa</h1>
+  <p class="kt-muted">Uma mesa virtual de Magic para jogar com os amigos: cada um cola o próprio deck, e vocês jogam pelo navegador, sem conta e sem instalar nada. As regras ficam com os jogadores, como numa mesa de verdade.</p>
 
-  <%= form_with url: tables_path, method: :post, class: "flex flex-col gap-3" do %>
-    <label>
+  <%= form_with url: tables_path, method: :post, class: "kt-form" do %>
+    <label class="kt-field">
       Seu nome
-      <input type="text" name="display_name" required class="border rounded w-full p-2">
+      <input type="text" name="display_name" required maxlength="40" autocomplete="nickname" autofocus class="kt-input">
     </label>
 
-    <label>
-      Formato
-      <select name="mtg_format" class="border rounded w-full p-2">
-        <option value="commander">Commander</option>
-        <option value="standard">Standard</option>
-      </select>
+    <div class="kt-row">
+      <label class="kt-field">
+        Formato
+        <select name="mtg_format" class="kt-input">
+          <option value="commander">Commander</option>
+          <option value="standard">Standard</option>
+        </select>
+      </label>
+
+      <label class="kt-field">
+        Jogadores
+        <input type="number" name="max_seats" value="4" min="1" max="8" required class="kt-input">
+      </label>
+    </div>
+
+    <label class="kt-field">
+      <span>Nome da mesa <span class="kt-optional">· opcional</span></span>
+      <input type="text" name="name" maxlength="60" placeholder="Commander de sexta" class="kt-input">
     </label>
 
-    <label>
-      Nome da mesa (opcional)
-      <input type="text" name="name" class="border rounded w-full p-2">
-    </label>
-
-    <label>
-      Assentos
-      <input type="number" name="max_seats" value="4" min="1" max="8" class="border rounded w-full p-2">
-    </label>
-
-    <button type="submit" class="bg-black text-white rounded p-2">Criar mesa</button>
+    <button type="submit" class="kt-btn kt-btn-primary" data-turbo-submits-with="Criando…">Criar mesa</button>
   <% end %>
-</div>
+
+  <p class="kt-hint">Depois de criar, copie o link de convite no tabuleiro e mande para os outros jogadores.</p>
+</section>

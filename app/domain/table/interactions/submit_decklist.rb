@@ -25,12 +25,12 @@ module Table
 
       def find_table(slug)
         table = @table_repo.find_by_slug(slug)
-        table ? Success(table) : Failure[:not_found, "Table not found"]
+        table ? Success(table) : Failure[:not_found, "Mesa não encontrada"]
       end
 
       def find_seat(table, seat_id)
         seat = @table_repo.seats_for(table).find { |s| s.id == seat_id.to_i }
-        seat ? Success(seat) : Failure[:not_found, "Seat not found"]
+        seat ? Success(seat) : Failure[:not_found, "Assento não encontrado"]
       end
     end
   end

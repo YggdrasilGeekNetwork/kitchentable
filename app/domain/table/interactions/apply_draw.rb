@@ -6,7 +6,7 @@ module Table
 
       def call(table_slug:, seat_id:, count: 1)
         count = count.to_i
-        return Failure[:validation_error, "Draw between 1 and #{MAX_COUNT} cards"] unless count.between?(1, MAX_COUNT)
+        return Failure[:validation_error, "Compre de 1 a #{MAX_COUNT} cartas"] unless count.between?(1, MAX_COUNT)
 
         step apply(table_slug) { |state| draw(state, seat_id.to_s, count) }
       end
@@ -15,7 +15,7 @@ module Table
 
       def draw(state, seat_id, count)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         drawn = seat_state.zones["library"].first(count)
         zones = seat_state.zones.merge(

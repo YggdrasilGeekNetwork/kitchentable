@@ -15,7 +15,7 @@ module Table
 
       def call(table_slug:, seat_id:)
         table = @table_repo.find_by_slug(table_slug)
-        return Failure[:not_found, "Table not found"] unless table
+        return Failure[:not_found, "Mesa não encontrada"] unless table
 
         views = Views::ViewPublisher.new(card_catalog: @card_catalog).views_for(
           state: @state_store.fetch(table_slug: table_slug), seats: @table_repo.seats_for(table), viewer_seat_ids: [ seat_id.to_s ]

@@ -5,7 +5,7 @@ module Table
     end
 
     rule(:format) do
-      key.failure("unsupported format") unless ::GameTable::SUPPORTED_FORMATS.include?(value)
+      key.failure("não suportado") unless ::GameTable::SUPPORTED_FORMATS.include?(value)
     end
   end
 end

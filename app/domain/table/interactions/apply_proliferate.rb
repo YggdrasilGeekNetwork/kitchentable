@@ -11,7 +11,7 @@ module Table
 
       def proliferate(state, seat_id)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         grown = seat_state.zones["battlefield"].filter_map { |id|
           instance = seat_state.instances[id]

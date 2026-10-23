@@ -5,4 +5,5 @@
 # First-boot self-seed: a fresh self-hosted instance has no Scryfall card data yet.
 # Enqueue the sync instead of running it inline so `db:seed`/deploy doesn't block on a
 # multi-MB download; the recurring job (config/recurring.yml) keeps it fresh after that.
-ScryfallSyncJob.perform_later if Card.count.zero?
+# Idempotent — the production entrypoint runs this on every boot.
+ScryfallSyncJob.enqueue_unless_catalog_ready

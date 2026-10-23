@@ -60,7 +60,7 @@ class ValidateDecklistTest < ActiveSupport::TestCase
     result = validate(list(@fillers.map(&:name)), commanders: [ "Not A Real Card" ])
 
     assert result.failure?
-    assert_equal [ "Unknown card: \"Not A Real Card\"" ], result.failure.last.map { |e| e[:message] }
+    assert_equal [ "Carta desconhecida: \"Not A Real Card\"" ], result.failure.last.map { |e| e[:message] }
   end
 
   test "Standard ignores the commander field" do

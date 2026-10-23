@@ -7,7 +7,7 @@ module Table
 
       def call(table_slug:, seat_id:, color: nil, delta: 0, clear: false)
         unless clear || COLORS.include?(color.to_s)
-          return Failure[:validation_error, "Mana color must be one of #{COLORS.join(", ")}"]
+          return Failure[:validation_error, "A cor de mana deve ser uma de #{COLORS.join(", ")}"]
         end
 
         step apply(table_slug) { |state| change(state, seat_id.to_s, color.to_s, delta.to_i, clear) }
@@ -17,7 +17,7 @@ module Table
 
       def change(state, seat_id, color, delta, clear)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         pool = clear ? {} : seat_state.mana_pool.merge(color => [ seat_state.mana_pool.fetch(color, 0) + delta, 0 ].max)
         Success(state.with_seat(seat_id, seat_state.with(mana_pool: pool.reject { |_, n| n.zero? })))

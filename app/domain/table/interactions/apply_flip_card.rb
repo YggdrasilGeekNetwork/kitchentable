@@ -10,8 +10,8 @@ module Table
 
       def flip(state, actor_id, instance_id)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:validation_error, "Only cards in public zones can be flipped"] unless Entities::SeatState::PUBLIC_ZONES.include?(zone)
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:validation_error, "Só cartas em zonas públicas podem ser transformadas"] unless Entities::SeatState::PUBLIC_ZONES.include?(zone)
 
         holder = state.seat(holder_id)
         instance = holder.instances[instance_id]

@@ -10,8 +10,8 @@ module Table
 
       def tap_card(state, actor_id, instance_id, tapped)
         holder_id, zone = state.locate(instance_id)
-        return Failure[:not_found, "Card instance not found"] unless holder_id
-        return Failure[:validation_error, "Only permanents on the battlefield can be tapped"] unless zone == "battlefield"
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] unless holder_id
+        return Failure[:validation_error, "Só permanentes no campo de batalha podem ser viradas"] unless zone == "battlefield"
 
         holder = state.seat(holder_id)
         instance = holder.instances[instance_id]

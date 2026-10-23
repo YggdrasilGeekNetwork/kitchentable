@@ -19,12 +19,12 @@ module Table
 
       def find_table(slug)
         table = @table_repo.find_by_slug(slug)
-        table ? Success(table) : Failure[:not_found, "Table not found"]
+        table ? Success(table) : Failure[:not_found, "Mesa não encontrada"]
       end
 
       def check_capacity(table)
         current = @table_repo.seats_for(table).size
-        current < table.max_seats ? Success(table) : Failure[:table_full, "Table is full"]
+        current < table.max_seats ? Success(table) : Failure[:table_full, "A mesa está cheia"]
       end
 
       def add_seat(table, session_id, display_name)

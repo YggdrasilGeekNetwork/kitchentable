@@ -8,11 +8,11 @@ module Table
     end
 
     rule(:format) do
-      key.failure("unsupported format") unless ::GameTable::SUPPORTED_FORMATS.include?(value)
+      key.failure("não suportado") unless ::GameTable::SUPPORTED_FORMATS.include?(value)
     end
 
     rule(:max_seats) do
-      key.failure("must be between 1 and 8") unless value.between?(1, 8)
+      key.failure("deve ser de 1 a 8") unless value.between?(1, 8)
     end
   end
 end

@@ -10,7 +10,7 @@ module Table
 
       def tap_all(state, seat_id, tapped)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         new_state = state.with_seat(seat_id, set_tapped(seat_state, tapped))
         Success(append_log(new_state, seat_id: seat_id, event_type: tapped ? "tap_all" : "untap_all"))

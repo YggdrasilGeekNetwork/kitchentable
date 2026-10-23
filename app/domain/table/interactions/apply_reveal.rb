@@ -7,7 +7,7 @@ module Table
 
       def call(table_slug:, seat_id:, card_instance_ids:)
         ids = Array(card_instance_ids).map(&:to_s).uniq
-        return Failure[:validation_error, "Choose 1-#{MAX_CARDS} cards to reveal"] unless ids.size.between?(1, MAX_CARDS)
+        return Failure[:validation_error, "Escolha de 1 a #{MAX_CARDS} cartas para revelar"] unless ids.size.between?(1, MAX_CARDS)
 
         step apply(table_slug) { |state| reveal(state, seat_id.to_s, ids) }
       end
@@ -16,12 +16,12 @@ module Table
 
       def reveal(state, actor_id, ids)
         locations = ids.map { |id| state.locate(id) }
-        return Failure[:not_found, "Card instance not found"] if locations.any?(&:nil?)
+        return Failure[:not_found, "Carta não encontrada — ela pode ter acabado de mudar de zona"] if locations.any?(&:nil?)
 
         owners = locations.map(&:first).uniq
-        return Failure[:validation_error, "Reveal cards from one player at a time"] unless owners.one?
+        return Failure[:validation_error, "Revele cartas de um jogador por vez"] unless owners.one?
         unless ids.zip(locations).all? { |id, (holder, zone)| touchable?(state, actor_id, holder, zone, id) }
-          return Failure[:forbidden, "You can't reveal those cards"]
+          return Failure[:forbidden, "Você não pode revelar essas cartas"]
         end
 
         reveal = { "id" => SecureRandom.hex(4), "by_seat_id" => actor_id, "owner_seat_id" => owners.first, "card_instance_ids" => ids }

@@ -28,16 +28,32 @@ const MANA_COLORS = [["W", "Branco"], ["U", "Azul"], ["B", "Preto"], ["R", "Verm
 // A permanent's height as % of its battlefield's height (board.css --kt-perm-h).
 const PERM_HEIGHT = 12
 const PLAYER_COUNTERS = ["Veneno", "Energia", "Experiência"]
+const OPENING_HAND_SIZE = 7
+// Holding a finger this long on a card or the battlefield opens its menu (touch
+// screens have no right click).
+const LONG_PRESS_MS = 550
+const SHORTCUTS = [
+  ["D", "Comprar 1 carta"], ["N", "Iniciar turno"], ["U", "Desvirar tudo"], ["S", "Embaralhar o grimório"],
+  ["T", "Virar/desvirar a permanente sob o cursor"], ["Ctrl + passar o mouse", "Selecionar várias cartas"],
+  ["Esc", "Fechar janelas e limpar a seleção"], ["Shift + − / +", "Mudar a vida em 5"],
+  ["Shift ao soltar no grimório", "Colocar no fundo"], ["?", "Mostrar estes atalhos"]
+]
 
 export default class extends Controller {
-  static targets = ["root", "decklistDialog", "flash"]
-  static values = { tableSlug: String, seatId: String, seatToken: String, inviteUrl: String, format: String, decklistError: Boolean }
+  static targets = ["root", "decklistDialog", "decklistWarning", "decklistSubmit", "flash"]
+  static values = {
+    tableSlug: String, seatId: String, seatToken: String, inviteUrl: String, format: String, maxSeats: Number, decklistError: Boolean
+  }
 
   connect() {
     this.view = null
     // The log starts closed and opens as a panel over the board, so it never takes
     // space from the battlefields.
-    this.ui = { logOpen: false, viewer: null, menu: null, dismissedReveals: new Set() }
+    this.ui = { logOpen: false, viewer: null, menu: null, dismissedReveals: new Set(), unreadChat: 0 }
+    // Offline only after the socket actually drops: the channel's first snapshot
+    // arrives before ActionCable's `connected` callback, and "Conectando…" already
+    // covers the time before it.
+    this.online = true
     this.dragging = false
     this.pendingRender = false
     this.hovered = null
@@ -49,11 +65,17 @@ export default class extends Controller {
 
     this.subscription = consumer.subscriptions.create(
       { channel: "TableChannel", table_slug: this.tableSlugValue, seat_id: this.seatIdValue, seat_token: this.seatTokenValue },
-      { received: (data) => this.received(data), rejected: () => this.toast("Não foi possível entrar nesta mesa.") }
+      {
+        received: (data) => this.received(data),
+        connected: () => this.setOnline(true),
+        disconnected: () => this.setOnline(false),
+        rejected: () => this.showRejected()
+      }
     )
 
     this.onKeydown = (event) => this.handleKey(event)
     this.onDocumentClick = (event) => { if (!event.target.closest(".kt-menu")) this.closeMenu() }
+    this.onPointerDown = (event) => this.startLongPress(event)
     // Renders wait while a card is being dragged (redrawing would drop the drag), so
     // the drag must always end — even when the dragged element's own dragend never
     // fires, e.g. because the drop already moved it.
@@ -62,6 +84,7 @@ export default class extends Controller {
     document.addEventListener("click", this.onDocumentClick)
     document.addEventListener("dragend", this.onDragFinished, true)
     document.addEventListener("drop", this.onDragFinished, true)
+    this.element.addEventListener("pointerdown", this.onPointerDown)
 
     if (this.decklistErrorValue) this.openDecklist()
     this.flashTargets.forEach((el) => setTimeout(() => el.remove(), 3500))
@@ -73,6 +96,7 @@ export default class extends Controller {
     document.removeEventListener("click", this.onDocumentClick)
     document.removeEventListener("dragend", this.onDragFinished, true)
     document.removeEventListener("drop", this.onDragFinished, true)
+    this.element.removeEventListener("pointerdown", this.onPointerDown)
   }
 
   // --- server traffic -------------------------------------------------------------
@@ -83,17 +107,79 @@ export default class extends Controller {
     if (data.type !== "table_view") return
 
     const firstView = !this.view
+    const previous = this.view
     this.view = data
     if (firstView) {
       this.buildShell()
+      this.ui.lastSeenSequence = lastSequence(data.log)
       if (!this.me.ready) this.openDecklist()
+    } else {
+      this.noticeNewChat(previous)
+      this.offerDrawUndo()
     }
     if (this.me.ready && this.decklistDialogTarget.open && !this.decklistErrorValue) this.decklistDialogTarget.close()
     this.refreshDeckTokens()
     this.requestRender()
   }
 
-  perform(action, data = {}) { this.subscription.perform(action, data) }
+  // Commands sent while the socket is down would be lost without a word; say so
+  // instead.
+  perform(action, data = {}) {
+    if (!this.online) return this.toast("Sem conexão com a mesa — a ação não foi enviada.")
+    this.subscription.perform(action, data)
+  }
+
+  // A banner over the board while the socket is down. ActionCable reconnects by
+  // itself, and the channel sends a fresh snapshot on (re)subscribe.
+  setOnline(online) {
+    const wasOffline = !this.online
+    this.online = online
+    if (!this.el) return
+    this.el.layout.classList.toggle("kt-offline", !online)
+    this.el.connection.hidden = online
+    if (online && wasOffline) this.toast("Conexão restabelecida.", "info")
+  }
+
+  showRejected() {
+    this.online = false
+    this.rootTarget.className = "kt-loading"
+    fill(this.rootTarget,
+      h("p", {}, "Não foi possível entrar nesta mesa: o link do assento não vale mais."),
+      h("a", { class: "kt-btn kt-btn-primary", href: this.inviteUrlValue }, "Voltar para a mesa"))
+  }
+
+  // While the log is closed, chat from others counts as unread (a badge on the Log
+  // button) and pops up briefly so it isn't missed.
+  noticeNewChat(previous) {
+    const since = lastSequence(previous.log)
+    const fresh = this.view.log.filter((e) => e.sequence > since && e.event_type === "chat" && e.seat_id !== this.seatIdValue)
+    if (!fresh.length) return
+    if (this.ui.logOpen) return
+    this.ui.unreadChat += fresh.length
+    fresh.slice(-2).forEach((e) => this.toast(describeEvent(e, this.view), "chat"))
+  }
+
+  // Clicking the library draws at once, so a misclick is easy: right after drawing a
+  // single card, offer to put it back on top.
+  drawOne() {
+    if (!this.me?.ready) return
+    this.pendingDraw = { hand: new Set(this.me.zones.hand.map((c) => c.id)), at: Date.now() }
+    this.perform("draw")
+  }
+
+  offerDrawUndo() {
+    const pending = this.pendingDraw
+    if (!pending || !this.me?.ready) return
+    if (Date.now() - pending.at > 5000) { this.pendingDraw = null; return }
+    const drawn = this.me.zones.hand.filter((c) => !pending.hand.has(c.id))
+    if (!drawn.length) return
+    this.pendingDraw = null
+    if (drawn.length !== 1) return
+    const card = drawn[0]
+    this.toast(`Você comprou ${this.face(card)?.name || "uma carta"}.`, "info", {
+      label: "Desfazer", run: () => this.move(card.id, "library", { to_position: 0 })
+    })
+  }
 
   // The tokens your deck can make, for the "Adicionar token" menu — asked for again
   // whenever you're dealt a deck (submitting one, or a restart).
@@ -157,9 +243,12 @@ export default class extends Controller {
       logList: h("ol", { class: "kt-log-list" }),
       overlays: h("div"),
       modals: h("div"),
-      zoom: h("div", { class: "kt-zoom" })
+      zoom: h("div", { class: "kt-zoom" }),
+      toasts: h("div", { class: "kt-toasts", "aria-live": "polite" }),
+      connection: h("div", { class: "kt-connection", role: "status", hidden: this.online },
+        h("span", { class: "kt-spinner", "aria-hidden": "true" }), "Conexão com a mesa perdida — reconectando…")
     }
-    const chatInput = h("input", { type: "text", placeholder: "Mensagem…", maxlength: 500 })
+    const chatInput = h("input", { type: "text", placeholder: "Mensagem…", maxlength: 500, "aria-label": "Mensagem para a mesa" })
     const chat = h("form", { class: "kt-chat", onsubmit: (e) => {
       e.preventDefault()
       if (!chatInput.value.trim()) return
@@ -170,10 +259,11 @@ export default class extends Controller {
       h("header", { class: "kt-dialog-header" }, h("h3", {}, "Log da mesa"),
         h("button", { class: "kt-icon-btn", "aria-label": "Fechar log", onclick: () => this.toggleLog() }, "✕")),
       this.el.logList, chat)
-    this.el.layout = h("div", { class: "kt-layout" }, this.el.topbar, this.el.play, this.el.log)
+    this.el.layout = h("div", { class: `kt-layout ${this.online ? "" : "kt-offline"}` }, this.el.topbar, this.el.play, this.el.log)
 
     this.rootTarget.className = "kt-root"
-    this.rootTarget.replaceChildren(this.el.layout, this.el.overlays, this.el.modals, this.el.zoom)
+    this.rootTarget.removeAttribute("role")
+    this.rootTarget.replaceChildren(this.el.layout, this.el.overlays, this.el.modals, this.el.zoom, this.el.toasts, this.el.connection)
   }
 
   requestRender() {
@@ -197,13 +287,17 @@ export default class extends Controller {
     this.el.log.hidden = !this.ui.logOpen
     fill(this.el.topbar, this.renderTopBar())
 
+    // Empty spaces invite only while the table still has free seats; otherwise the
+    // opponents present share the column.
     const opponents = this.opponents
-    const slots = Math.max(MIN_OPPONENT_SLOTS, opponents.length)
+    const invites = Math.min(this.freeSeats, Math.max(0, MIN_OPPONENT_SLOTS - opponents.length))
+    const slots = Math.max(1, opponents.length + invites)
     fill(this.el.play,
       this.me.ready ? this.renderMyArea() : this.renderNotReady(),
-      h("section", { class: "kt-opponents", style: { "--kt-opponent-slots": slots } },
+      h("section", { class: "kt-opponents", style: { "--kt-opponent-slots": slots }, "aria-label": "Oponentes" },
         opponents.map((s) => this.renderOpponent(s)),
-        Array.from({ length: slots - opponents.length }, () => this.renderEmptySeat()))
+        Array.from({ length: invites }, () => this.renderEmptySeat()),
+        !opponents.length && !invites ? h("article", { class: "kt-opponent kt-opponent-empty" }, h("p", {}, "Sem oponentes nesta mesa.")) : null)
     )
 
     const list = this.el.logList
@@ -255,25 +349,56 @@ export default class extends Controller {
     return img
   }
 
+  // Table-wide state and actions only; your own life and counters sit in the header of
+  // your area, the way each opponent's sit in theirs.
   renderTopBar() {
     const me = this.me
+    const unread = this.ui.unreadChat
     return [
       h("span", { class: "kt-brand" }, "Kitchentable"),
-      me.ready ? this.renderLife(me) : null,
-      me.ready ? this.renderCommanderDamage(me) : null,
-      me.ready ? h("button", { class: "kt-link", onclick: (e) => this.openPlayerCounterMenu(e, me) }, "Contadores ▾") : null,
-      me.ready ? this.renderCounterChips(me) : null,
       h("span", { class: "kt-turn", title: "Rodadas: voltas completas na mesa. Seu turno: quantos turnos você já começou." },
         `Rodada ${this.view.round}`, me.ready ? ` · Seu turno ${me.turns_taken}` : ""),
       this.renderTurnOrder(),
       me.ready ? this.renderTurnButton() : null,
       h("span", { class: "kt-spacer" }),
-      me.ready ? h("span", { class: "kt-hint" }, "Botão direito no campo ou numa carta para ações") : null,
-      me.ready ? h("button", { class: "kt-link", disabled: !!this.view.restart_vote, onclick: () => this.requestRestart() }, "Reiniciar") : null,
-      h("button", { class: "kt-link", onclick: (e) => this.openDiceMenu(e) }, "Dados ▾"),
-      h("button", { class: "kt-link", onclick: () => this.openDecklist() }, "Deck"),
-      h("button", { class: "kt-link", onclick: () => this.toggleLog() }, this.ui.logOpen ? "Ocultar log" : "Log")
+      h("button", { class: "kt-link", "aria-haspopup": "menu", onclick: (e) => this.openDiceMenu(e) }, "Dados ▾"),
+      h("button", { class: "kt-link", "aria-haspopup": "menu", onclick: (e) => this.openTableMenu(e) }, "Mesa ▾"),
+      h("button", { class: "kt-link", title: "Atalhos do teclado (?)", "aria-label": "Atalhos do teclado", onclick: () => this.openShortcuts() }, "?"),
+      h("button", { class: "kt-link", "aria-pressed": String(this.ui.logOpen), onclick: () => this.toggleLog() },
+        this.ui.logOpen ? "Ocultar log" : "Log",
+        unread && !this.ui.logOpen ? h("span", { class: "kt-badge-count", "aria-label": `${unread} mensagens novas` }, unread) : null)
     ]
+  }
+
+  openTableMenu(event) {
+    const me = this.me
+    const free = this.freeSeats
+    this.openMenu(event, [
+      free > 0 && { label: `Copiar link de convite (${plural(free, "lugar livre", "lugares livres")})`, run: () => this.copyInvite() },
+      { label: me.ready ? "Trocar de deck…" : "Enviar deck…", run: () => this.openDecklist() },
+      me.ready && { label: this.view.restart_vote ? "Reinício já pedido" : "Pedir para reiniciar o jogo…",
+                    disabled: !!this.view.restart_vote, run: () => this.requestRestart() },
+      "-",
+      { label: "Atalhos do teclado", key: "?", run: () => this.openShortcuts() }
+    ])
+  }
+
+  get freeSeats() {
+    return this.maxSeatsValue ? Math.max(0, this.maxSeatsValue - this.view.seats.length) : 0
+  }
+
+  // Your name, life, commander damage and counters, above your battlefield.
+  renderMyHeader(me) {
+    return h("header", { class: "kt-mine-header" },
+      h("span", { class: "kt-seat-number", title: "Assento / ordem de turno" }, me.seat_number),
+      h("strong", {}, "Você"),
+      this.myTurn ? h("span", { class: "kt-chip kt-chip-turn" }, "na vez") : null,
+      this.renderLife(me),
+      this.renderCommanderDamage(me),
+      h("button", { class: "kt-link", "aria-haspopup": "menu", onclick: (e) => this.openPlayerCounterMenu(e, me) }, "Contadores ▾"),
+      this.renderCounterChips(me),
+      h("span", { class: "kt-spacer" }),
+      h("span", { class: "kt-hint" }, "Botão direito (ou toque longo) no campo ou numa carta para ações"))
   }
 
   // "Iniciar turno" until you've started the turn you were passed (untap, draw), then
@@ -298,7 +423,11 @@ export default class extends Controller {
     if (this.myTurn && this.view.turn_started) return this.toast("Seu turno já começou — passe o turno quando terminar.", "info")
     if (this.myTurn) return this.perform("start_turn")
     if (this.view.awaiting_first_turn) return
-    if (window.confirm("Tem certeza que deseja jogar outro turno mesmo que não seja sua vez?")) this.perform("start_turn", { out_of_turn: true })
+    this.confirmAction({
+      title: "Jogar um turno fora da sua vez?",
+      body: `Agora é a vez de ${seatName(this.view, this.view.active_seat_id)}. Você vai desvirar, remover o enjoo e comprar, e a mesa vê isso no log.`,
+      confirmLabel: "Jogar mesmo assim"
+    }).then((ok) => ok && this.perform("start_turn", { out_of_turn: true }))
   }
 
   // Seats in turn order (seat numbers), whoever plays now highlighted, you marked.
@@ -314,10 +443,11 @@ export default class extends Controller {
 
   renderLife(seat) {
     const target = seat.seat_id === this.seatIdValue ? {} : { target_seat_id: seat.seat_id }
-    return h("span", { class: "kt-life" },
-      h("button", { class: "kt-life-btn", title: "-1 (Shift: -5)", onclick: (e) => this.perform("set_life", { delta: e.shiftKey ? -5 : -1, ...target }) }, "−"),
-      h("span", { class: "kt-life-total" }, seat.life_total),
-      h("button", { class: "kt-life-btn", title: "+1 (Shift: +5)", onclick: (e) => this.perform("set_life", { delta: e.shiftKey ? 5 : 1, ...target }) }, "+"))
+    const whose = seat.seat_id === this.seatIdValue ? "sua vida" : `vida de ${seat.display_name}`
+    return h("span", { class: "kt-life", role: "group", "aria-label": `Vida de ${seat.seat_id === this.seatIdValue ? "você" : seat.display_name}` },
+      h("button", { class: "kt-life-btn", title: "-1 (Shift: -5)", "aria-label": `Tirar 1 da ${whose}`, onclick: (e) => this.perform("set_life", { delta: e.shiftKey ? -5 : -1, ...target }) }, "−"),
+      h("span", { class: "kt-life-total", "aria-live": "polite" }, seat.life_total),
+      h("button", { class: "kt-life-btn", title: "+1 (Shift: +5)", "aria-label": `Somar 1 à ${whose}`, onclick: (e) => this.perform("set_life", { delta: e.shiftKey ? 5 : 1, ...target }) }, "+"))
   }
 
   // Damage this player has taken from each commander that isn't theirs, always on
@@ -338,24 +468,24 @@ export default class extends Controller {
         title: `Dano de comandante de ${name} (${owner}) — letal com ${LETHAL_COMMANDER_DAMAGE}. Somar tira vida.`
       },
         h("span", { class: "kt-cmd-name" }, shortName(name)),
-        this.stepper(`cmd|${seat.seat_id}|${commander.instance_id}`, value, (delta) => change(commander, delta)))
+        this.stepper(`cmd|${seat.seat_id}|${commander.instance_id}`, value, (delta) => change(commander, delta), `Dano de comandante de ${name}`))
     }))
   }
 
   // − [total] +: buttons step by 1 (Shift: 5); typing a total and pressing Enter (or
   // leaving the field) sends the difference. Escape puts the current total back.
-  stepper(focusKey, value, onDelta) {
+  stepper(focusKey, value, onDelta, label) {
     return [
-      h("button", { class: "kt-cmd-btn", title: "−1 (Shift: −5)", onclick: (e) => onDelta(e.shiftKey ? -5 : -1) }, "−"),
-      this.totalInput(focusKey, value, onDelta),
-      h("button", { class: "kt-cmd-btn", title: "+1 (Shift: +5)", onclick: (e) => onDelta(e.shiftKey ? 5 : 1) }, "+")
+      h("button", { class: "kt-cmd-btn", title: "−1 (Shift: −5)", "aria-label": `${label}: −1`, onclick: (e) => onDelta(e.shiftKey ? -5 : -1) }, "−"),
+      this.totalInput(focusKey, value, onDelta, label),
+      h("button", { class: "kt-cmd-btn", title: "+1 (Shift: +5)", "aria-label": `${label}: +1`, onclick: (e) => onDelta(e.shiftKey ? 5 : 1) }, "+")
     ]
   }
 
-  totalInput(focusKey, value, onDelta) {
+  totalInput(focusKey, value, onDelta, label) {
     const input = h("input", {
       type: "number", min: 0, max: 999, value, class: "kt-cmd-input",
-      dataset: { focusKey }, title: "Digite o total e tecle Enter"
+      dataset: { focusKey }, title: "Digite o total e tecle Enter", "aria-label": label
     })
     // Enter commits and blurs, and the blur fires "change" too — track what was
     // already applied so the difference is only sent once.
@@ -388,18 +518,22 @@ export default class extends Controller {
       class: `kt-cmd-chip kt-counter-chip ${key === "Veneno" && value >= 10 ? "kt-lethal" : ""}`, title: key
     },
       h("span", { class: "kt-cmd-name" }, key),
-      this.stepper(`counter|${seat.seat_id}|${key}`, value, (delta) => this.perform("player_counter", { key, delta, ...target })))))
+      this.stepper(`counter|${seat.seat_id}|${key}`, value, (delta) => this.perform("player_counter", { key, delta, ...target }), key))))
   }
 
   renderNotReady() {
     return h("section", { class: "kt-empty" },
       h("p", {}, "Você ainda não enviou um deck para esta mesa."),
-      h("button", { class: "kt-btn kt-btn-primary", onclick: () => this.openDecklist() }, "Enviar deck"))
+      h("button", { class: "kt-btn kt-btn-primary", onclick: () => this.openDecklist() }, "Enviar deck"),
+      this.freeSeats ? h("p", { class: "kt-muted" }, "Enquanto isso, ",
+        h("button", { class: "kt-link kt-link-inline", onclick: () => this.copyInvite() }, "copie o link de convite"),
+        " para chamar os outros jogadores.") : null)
   }
 
   renderMyArea() {
     const me = this.me
-    return h("section", { class: "kt-mine" },
+    return h("section", { class: "kt-mine", "aria-label": "Sua área" },
+      this.renderMyHeader(me),
       h("div", { class: "kt-field-wrap" },
         this.renderBattlefield(me, { own: true }),
         this.renderStack()),
@@ -622,8 +756,10 @@ export default class extends Controller {
   // still be dropped on the tile (or dragged off its top card).
   renderZoneTile(seat, zoneName) {
     const cards = seat.zones[zoneName]
+    const open = () => this.openViewer({ seatId: seat.seat_id, zone: zoneName })
     const tile = h("div", { class: "kt-pile", title: `${ZONE_LABELS[zoneName]} — clique para ver as cartas`,
-                            onclick: () => this.openViewer({ seatId: seat.seat_id, zone: zoneName }) },
+                            role: "button", tabindex: 0, "aria-label": `${ZONE_LABELS[zoneName]}: ${plural(cards.length, "carta", "cartas")}. Abrir`,
+                            onclick: open, onkeydown: activateOnKey(open) },
       cards[0] ? this.renderCard(cards[0], { zone: zoneName, seat }) : h("div", { class: "kt-card kt-card-slot" }),
       h("span", { class: "kt-pile-label" }, ZONE_LABELS[zoneName], h("b", {}, cards.length)))
     this.makeDropTarget(tile, this.dropTo(zoneName))
@@ -635,7 +771,8 @@ export default class extends Controller {
   renderLibrary(seat) {
     const count = seat.zone_counts.library
     const pile = h("div", { class: "kt-library", title: "Grimório — clique para comprar · botão direito para opções · solte uma carta aqui para o topo (Shift: fundo)",
-                            onclick: () => this.perform("draw"),
+                            role: "button", tabindex: 0, "aria-label": `Grimório: ${plural(count, "carta", "cartas")}. Comprar 1`,
+                            onclick: () => this.drawOne(), onkeydown: activateOnKey(() => this.drawOne()),
                             oncontextmenu: (e) => { e.preventDefault(); this.openMenu(e, this.libraryItems(seat)) } },
       h("span", { class: "kt-zone-label" }, `Grimório (${count})`, seat.top_revealed ? " · topo revelado" : ""),
       seat.library_top_card ? this.renderCard(seat.library_top_card, { zone: "library", seat })
@@ -706,7 +843,11 @@ export default class extends Controller {
       await navigator.clipboard.writeText(this.inviteUrlValue)
       this.toast("Link da mesa copiado — quem abrir entra num lugar livre.", "info")
     } catch {
-      window.prompt("Copie o link da mesa:", this.inviteUrlValue)
+      // No clipboard access (plain http, or permission denied): show it selected.
+      const input = h("input", { class: "kt-input", readonly: true, value: this.inviteUrlValue, "aria-label": "Link da mesa" })
+      this.openModal("Link de convite", h("div", { class: "kt-form" },
+        h("p", { class: "kt-muted" }, "Copie o link abaixo e mande para os outros jogadores. Quem abrir entra num lugar livre."), input))
+      input.select()
     }
   }
 
@@ -779,13 +920,25 @@ export default class extends Controller {
     const exile = h("div", { class: "kt-dropzone" }, "Exílio")
     this.makeDropTarget(exile, this.dropTo("exile"))
 
-    return h("div", { class: "kt-overlay" },
+    // London mulligan: after N mulligans you keep 7 − N, bottoming the rest first.
+    const keepSize = Math.max(0, OPENING_HAND_SIZE - me.mulligan_count)
+    const owed = Math.max(0, me.zones.hand.length - keepSize)
+    const nextKeep = Math.max(0, OPENING_HAND_SIZE - me.mulligan_count - 1)
+
+    return h("div", { class: "kt-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Mão inicial" },
       h("div", { class: "kt-opening" },
         h("h2", {}, "Mão inicial"),
         h("div", { class: "kt-opening-buttons" },
-          h("button", { class: "kt-btn kt-btn-keep", onclick: () => this.perform("keep_hand") }, "Manter"),
-          h("button", { class: "kt-btn", onclick: () => this.perform("mulligan") }, `Mulligan (${me.mulligan_count})`)),
-        me.mulligan_count ? h("p", { class: "kt-muted" }, `Mulligan londrino: arraste ${me.mulligan_count} carta(s) para o fundo do grimório.`) : null,
+          h("button", { class: "kt-btn kt-btn-keep", disabled: owed > 0, onclick: () => this.perform("keep_hand"),
+                        title: owed ? `Coloque ${plural(owed, "carta", "cartas")} no fundo antes de manter` : null },
+            owed ? `Manter (${owed === 1 ? "falta 1 carta" : `faltam ${owed} cartas`} no fundo)` : `Manter ${plural(me.zones.hand.length, "carta", "cartas")}`),
+          h("button", { class: "kt-btn", onclick: () => this.perform("mulligan") },
+            `Mulligan — ficar com ${nextKeep}`)),
+        me.mulligan_count
+          ? h("p", { class: owed ? "kt-warning" : "kt-muted" }, owed
+            ? `Mulligan londrino (${me.mulligan_count}): arraste ${plural(owed, "carta", "cartas")} da mão para o fundo do grimório.`
+            : `Mulligan londrino (${me.mulligan_count}): pronto, você pode manter.`)
+          : null,
         h("div", { class: "kt-fan" }, me.zones.hand.map((instance, i, all) => {
           const el = this.renderCard(instance, { zone: "hand", seat: me })
           const offset = i - (all.length - 1) / 2
@@ -822,7 +975,11 @@ export default class extends Controller {
   }
 
   requestRestart() {
-    if (window.confirm("Pedir para reiniciar o jogo? Todos os jogadores precisam aceitar.")) this.perform("restart_vote", { answer: "request" })
+    this.confirmAction({
+      title: "Pedir para reiniciar o jogo?",
+      body: "Todos os jogadores precisam aceitar. Se aceitarem, todos voltam ao começo: grimório embaralhado, mão nova de 7 e vida inicial.",
+      confirmLabel: "Pedir reinício"
+    }).then((ok) => ok && this.perform("restart_vote", { answer: "request" }))
   }
 
   renderReveals() {
@@ -911,7 +1068,7 @@ export default class extends Controller {
     return h("div", { class: "kt-overlay", onclick: (e) => { if (e.target === e.currentTarget) close(false) } },
       h("div", { class: "kt-viewer kt-search-viewer" },
         h("header", { class: "kt-dialog-header" }, h("h2", {}, `Buscar no grimório (${seat.library_top.length})`),
-          h("button", { class: "kt-icon-btn", title: "Fechar", onclick: () => close(false) }, "✕")),
+          h("button", { class: "kt-icon-btn", title: "Fechar", "aria-label": "Fechar", onclick: () => close(false) }, "✕")),
         input,
         h("p", { class: "kt-muted" }, "Clique duplo manda a carta para a mão; arraste ou use o botão direito para outras zonas."),
         h("div", { class: "kt-viewer-cards" }, cards.length ? cards.map((instance) => {
@@ -927,7 +1084,7 @@ export default class extends Controller {
   viewerShell(title, onClose, cards, footer = [], hint = "Arraste as cartas para onde quiser, ou use o botão direito.") {
     return h("div", { class: "kt-overlay", onclick: (e) => { if (e.target === e.currentTarget) onClose() } },
       h("div", { class: "kt-viewer" },
-        h("header", { class: "kt-dialog-header" }, h("h2", {}, title), h("button", { class: "kt-icon-btn", title: "Fechar", onclick: onClose }, "✕")),
+        h("header", { class: "kt-dialog-header" }, h("h2", {}, title), h("button", { class: "kt-icon-btn", title: "Fechar", "aria-label": "Fechar", onclick: onClose }, "✕")),
         h("p", { class: "kt-muted" }, hint),
         h("div", { class: "kt-viewer-cards" }, cards.length ? cards : h("p", { class: "kt-muted" }, "Vazio.")),
         footer.length ? h("footer", {}, footer) : null))
@@ -940,7 +1097,8 @@ export default class extends Controller {
   renderMenu() {
     const { x, y, items } = this.ui.menu
     const flip = x > window.innerWidth - 460
-    const menu = h("div", { class: `kt-menu ${flip ? "kt-menu-flip" : ""}`, style: { left: `${x}px`, top: `${y}px` } }, this.menuItems(items))
+    const menu = h("div", { class: `kt-menu ${flip ? "kt-menu-flip" : ""}`, role: "menu", tabindex: -1, dataset: { focusKey: "menu" }, style: { left: `${x}px`, top: `${y}px` },
+                            onkeydown: (e) => this.menuKey(e) }, this.menuItems(items, "menu"))
     requestAnimationFrame(() => {
       const rect = menu.getBoundingClientRect()
       if (rect.bottom > window.innerHeight) menu.style.top = `${Math.max(8, window.innerHeight - rect.height - 8)}px`
@@ -949,30 +1107,79 @@ export default class extends Controller {
     return menu
   }
 
-  menuItems(items) {
-    return items.filter(Boolean).map((item) => {
-      if (item === "-") return h("hr")
-      if (item.heading) return h("div", { class: "kt-menu-heading" }, item.heading)
+  // Each item carries a focus key, so keyboard focus survives the redraws other
+  // players' updates cause while the menu is open.
+  menuItems(items, path) {
+    return items.filter(Boolean).map((item, i) => {
+      if (item === "-") return h("hr", { role: "separator" })
+      if (item.heading) return h("div", { class: "kt-menu-heading", role: "presentation" }, item.heading)
+      const focusKey = `${path}.${i}`
       if (item.children) {
-        return h("div", { class: "kt-menu-item kt-has-sub", tabindex: 0 },
-          h("span", {}, item.label), h("span", { class: "kt-menu-key" }, "›"),
-          h("div", { class: "kt-menu kt-submenu" }, this.menuItems(item.children)))
+        return h("div", { class: "kt-menu-item kt-has-sub", tabindex: 0, role: "menuitem", "aria-haspopup": "menu", dataset: { focusKey } },
+          h("span", {}, item.label), h("span", { class: "kt-menu-key", "aria-hidden": "true" }, "›"),
+          h("div", { class: "kt-menu kt-submenu", role: "menu" }, this.menuItems(item.children, focusKey)))
       }
-      return h("button", { class: "kt-menu-item", onclick: () => { this.closeMenu(); item.run() } },
+      return h("button", { class: "kt-menu-item", role: "menuitem", disabled: item.disabled, dataset: { focusKey },
+                           onclick: () => { this.closeMenu(); item.run() } },
         h("span", {}, item.label), item.key ? h("span", { class: "kt-menu-key" }, item.key) : null)
     })
   }
 
+  // ↑/↓ move within a menu, → / Enter open a submenu, ← goes back to its parent.
+  menuKey(event) {
+    const item = event.target.closest(".kt-menu-item")
+    if (!item) {
+      const first = event.currentTarget.querySelector(":scope > .kt-menu-item:not(:disabled)")
+      if (first && ["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); first.focus() }
+      return
+    }
+    const list = item.parentElement
+    const siblings = [...list.children].filter((el) => el.matches(".kt-menu-item:not(:disabled)"))
+    const index = siblings.indexOf(item)
+    const sub = item.classList.contains("kt-has-sub") ? item.querySelector(":scope > .kt-submenu .kt-menu-item:not(:disabled)") : null
+    const parent = list.classList.contains("kt-submenu") ? list.parentElement : null
+    const moves = {
+      ArrowDown: () => siblings[(index + 1) % siblings.length],
+      ArrowUp: () => siblings[(index - 1 + siblings.length) % siblings.length],
+      Home: () => siblings[0],
+      End: () => siblings[siblings.length - 1],
+      ArrowRight: () => sub,
+      Enter: () => sub,
+      " ": () => sub,
+      ArrowLeft: () => parent
+    }
+    const next = moves[event.key]?.()
+    if (!next) return
+    event.preventDefault()
+    event.stopPropagation()
+    next.focus()
+  }
+
   openMenu(event, items) {
     event.stopPropagation()
-    this.ui.menu = { x: event.clientX, y: event.clientY, items }
+    // Opened from the keyboard (Enter on a button) there's no pointer position: open
+    // under the button instead.
+    let { clientX: x, clientY: y } = event
+    const fromKeyboard = !x && !y && event.currentTarget?.getBoundingClientRect
+    if (fromKeyboard) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      x = rect.left
+      y = rect.bottom + 4
+    }
+    if (!this.ui.menu) this.menuReturnFocus = document.activeElement
+    this.ui.menu = { x, y, items }
     this.render()
+    const menu = this.el.overlays.querySelector(".kt-menu")
+    const target = fromKeyboard ? menu?.querySelector(":scope > .kt-menu-item:not(:disabled)") : menu
+    target?.focus({ preventScroll: true })
   }
 
   closeMenu() {
     if (!this.ui.menu) return
     this.ui.menu = null
     this.render()
+    if (this.menuReturnFocus?.isConnected) this.menuReturnFocus.focus({ preventScroll: true })
+    this.menuReturnFocus = null
   }
 
   // Right-click on empty battlefield: table actions (the goldfish "playtester" menu).
@@ -1006,10 +1213,12 @@ export default class extends Controller {
     return [
       { label: "Buscar no grimório…", run: () => { this.ui.searchFilter = ""; this.perform("peek", { search: true }) } },
       "-",
-      { label: "Comprar 1", key: "D", run: () => this.perform("draw") },
-      { label: "Comprar N…", run: () => { const n = askCount("Comprar quantas?", 7); if (n) this.perform("draw", { count: n }) } },
+      { label: "Comprar 1", key: "D", run: () => this.drawOne() },
+      { label: "Comprar N…", run: () => this.askNumber({ title: "Comprar quantas cartas?", value: 7, presets: [2, 3, 7], confirmLabel: "Comprar" })
+        .then((n) => n && this.perform("draw", { count: n })) },
       { label: "Olhar o topo…", run: () => this.promptPeek(seat) },
-      { label: "Moer N…", run: () => { const n = askCount("Moer quantas cartas?", 1); if (n) this.perform("mill", { count: n }) } },
+      { label: "Moer N…", run: () => this.askNumber({ title: "Moer quantas cartas?", value: 1, presets: [1, 2, 3, 5], confirmLabel: "Moer" })
+        .then((n) => n && this.perform("mill", { count: n })) },
       { label: "Embaralhar", key: "S", run: () => this.perform("shuffle") },
       "-",
       { label: `${seat.top_revealed ? "✓ " : ""}Jogar com o topo revelado`, run: () => this.perform("top_revealed", { revealed: !seat.top_revealed }) }
@@ -1053,12 +1262,14 @@ export default class extends Controller {
     const counters = counterKeys.flatMap((key) => [
       { label: `${key} +1`, run: () => counter(key, 1) },
       instance.counters?.[key] ? { label: `${key} −1`, run: () => counter(key, -1) } : null
-    ]).concat("-", { label: "Outro contador…", run: () => { const key = window.prompt("Nome do contador (ex.: Imposto do comandante)"); if (key) counter(key, 1) } })
+    ]).concat("-", { label: "Outro contador…", run: () => this.askText({ title: "Novo contador", label: "Nome do contador", placeholder: "Imposto do comandante", maxlength: 30 })
+      .then((key) => key && counter(key, 1)) })
 
     const steps = [1, -1, 2, -2, 3, -3]
     const modified = instance.power_mod || instance.toughness_mod
     const copies = card && [1, 2, 3].map((n) => ({ label: `${n}×`, run: () => this.perform("create_card", { card_id: card.id, token: true, count: n, ...spot() }) }))
-      .concat({ label: "N…", run: () => { const n = askCount("Quantas cópias?", 4); if (n) this.perform("create_card", { card_id: card.id, token: true, count: n }) } })
+      .concat({ label: "N…", run: () => this.askNumber({ title: "Quantas cópias?", value: 4, presets: [4, 5, 10], confirmLabel: "Criar" })
+        .then((n) => n && this.perform("create_card", { card_id: card.id, token: true, count: n })) })
 
     this.openMenu(event, [
       onField && { label: instance.tapped ? "Desvirar" : "Virar (tap)", key: "T", run: () => this.perform("tap_card", { card_instance_id: id, tapped: !instance.tapped }) },
@@ -1076,7 +1287,11 @@ export default class extends Controller {
       "-",
       face && { label: "Ver detalhes da carta", run: () => this.openDetails(instance) },
       copies && { label: "Criar cópia como token", children: copies },
-      { label: "Remover do jogo", run: () => { if (window.confirm(`Remover ${face?.name || "esta carta"} do jogo?`)) this.perform("remove_card", { card_instance_id: id }) } }
+      { label: "Remover do jogo…", run: () => this.confirmAction({
+        title: `Remover ${face?.name || "esta carta"} do jogo?`,
+        body: "A carta sai da partida de vez — não vai para o cemitério nem para o exílio. Use para tokens e cópias.",
+        confirmLabel: "Remover", danger: true
+      }).then((ok) => ok && this.perform("remove_card", { card_instance_id: id })) }
     ])
   }
 
@@ -1110,9 +1325,11 @@ export default class extends Controller {
       })) },
       myHand.length && { label: "Revelar as da mão", run: done(() => this.revealIds(myHand.map((l) => l.id))) },
       "-",
-      { label: "Remover todas do jogo", run: () => {
-        if (window.confirm(`Remover ${ids.length} cartas do jogo?`)) done(() => each(located, "remove_card", () => ({})))()
-      } },
+      { label: "Remover todas do jogo…", run: () => this.confirmAction({
+        title: `Remover ${ids.length} cartas do jogo?`,
+        body: "Elas saem da partida de vez — não vão para o cemitério nem para o exílio.",
+        confirmLabel: "Remover todas", danger: true
+      }).then((ok) => ok && done(() => each(located, "remove_card", () => ({})))()) },
       { label: "Limpar seleção", key: "Esc", run: () => this.clearSelection() }
     ])
   }
@@ -1126,7 +1343,8 @@ export default class extends Controller {
     this.openMenu(event, [
       { heading: `Contadores de ${seat.display_name}` },
       ...PLAYER_COUNTERS.filter((key) => !present.includes(key)).map((key) => ({ label: `Adicionar ${key}`, run: () => add(key) })),
-      { label: "Adicionar outro…", run: () => { const key = window.prompt("Nome do contador"); if (key) add(key) } },
+      { label: "Adicionar outro…", run: () => this.askText({ title: "Novo contador", label: "Nome do contador", placeholder: "Tempestade", maxlength: 30 })
+        .then((key) => key && add(key)) },
       present.length && "-",
       ...present.map((key) => ({ label: `Remover ${key}`, run: () => this.perform("player_counter", { key, remove: true, ...target }) }))
     ])
@@ -1137,7 +1355,8 @@ export default class extends Controller {
       { label: "Moeda", run: () => this.perform("roll_dice", { sides: 2 }) },
       { label: "d6", run: () => this.perform("roll_dice", { sides: 6 }) },
       { label: "d20", run: () => this.perform("roll_dice", { sides: 20 }) },
-      { label: "Outro dado…", run: () => { const n = askCount("Quantos lados?", 12); if (n) this.perform("roll_dice", { sides: n }) } }
+      { label: "Outro dado…", run: () => this.askNumber({ title: "Quantos lados tem o dado?", value: 12, min: 2, max: 1000, presets: [4, 8, 10, 12, 100], confirmLabel: "Rolar" })
+        .then((n) => n && this.perform("roll_dice", { sides: n })) }
     ])
   }
 
@@ -1148,32 +1367,144 @@ export default class extends Controller {
 
   // --- modals with inputs (built once, never redrawn) -----------------------------
 
-  openModal(title, body) {
-    const close = () => this.el.modals.replaceChildren()
-    this.el.modals.replaceChildren(h("div", { class: "kt-overlay kt-modal-overlay", onclick: (e) => { if (e.target === e.currentTarget) close() } },
-      h("div", { class: "kt-viewer kt-modal" },
-        h("header", { class: "kt-dialog-header" }, h("h2", {}, title), h("button", { class: "kt-icon-btn", onclick: close }, "✕")),
-        body)))
-    this.el.modals.querySelector("input")?.focus()
+  // One modal at a time. Tab stays inside it, Escape or a click outside closes it
+  // (onClose runs once, however it closes), and focus goes back where it was.
+  openModal(title, body, { onClose } = {}) {
+    const returnFocus = document.activeElement
+    let closed = false
+    const close = () => {
+      if (closed) return
+      closed = true
+      if (this.el.modals.firstChild === overlay) this.el.modals.replaceChildren()
+      onClose?.()
+      if (returnFocus?.isConnected) returnFocus.focus({ preventScroll: true })
+    }
+    const titleId = `kt-modal-${Date.now()}`
+    const overlay = h("div", { class: "kt-overlay kt-modal-overlay", onclick: (e) => { if (e.target === e.currentTarget) close() } },
+      h("div", { class: "kt-viewer kt-modal", role: "dialog", "aria-modal": "true", "aria-labelledby": titleId, onkeydown: (e) => trapTab(e) },
+        h("header", { class: "kt-dialog-header" }, h("h2", { id: titleId }, title), h("button", { class: "kt-icon-btn", "aria-label": "Fechar", onclick: close }, "✕")),
+        body))
+    overlay.ktClose = close
+    this.closeModal()
+    this.el.modals.replaceChildren(overlay)
+    ;(this.el.modals.querySelector("[autofocus], input, select, textarea") || this.el.modals.querySelector(".kt-modal button:not(.kt-icon-btn)"))?.focus()
     return close
   }
 
+  closeModal() {
+    const overlay = this.el.modals.firstChild
+    if (overlay?.ktClose) overlay.ktClose()
+    else this.el.modals.replaceChildren()
+  }
+
+  // In-app replacements for window.prompt/confirm: themed, validated, never blocking
+  // the page (other players' updates keep drawing underneath). Resolve to null/false
+  // when dismissed.
+  askNumber({ title, label = "Quantidade", value = 1, min = 1, max = 999, presets = [], confirmLabel = "OK", hint = null }) {
+    return new Promise((resolve) => {
+      let answer = null
+      const input = h("input", { type: "number", class: "kt-input", min, max, value, required: true, autofocus: true, "aria-label": label })
+      const pick = (n) => { answer = n; close() }
+      const form = h("form", { class: "kt-form", onsubmit: (e) => {
+        e.preventDefault()
+        const n = parseInt(input.value, 10)
+        if (Number.isFinite(n) && n >= min && n <= max) pick(n)
+      } },
+        h("label", { class: "kt-field" }, label, input),
+        presets.length ? h("div", { class: "kt-presets" }, presets.map((n) => h("button", { type: "button", class: "kt-btn kt-btn-small", onclick: () => pick(n) }, n))) : null,
+        hint ? h("p", { class: "kt-muted" }, hint) : null,
+        h("div", { class: "kt-modal-actions" },
+          h("button", { type: "button", class: "kt-btn", onclick: () => close() }, "Cancelar"),
+          h("button", { type: "submit", class: "kt-btn kt-btn-primary" }, confirmLabel)))
+      const close = this.openModal(title, form, { onClose: () => resolve(answer) })
+      input.select()
+    })
+  }
+
+  askText({ title, label, placeholder = "", maxlength = 60, confirmLabel = "Adicionar" }) {
+    return new Promise((resolve) => {
+      let answer = null
+      const input = h("input", { type: "text", class: "kt-input", placeholder, maxlength, required: true, autofocus: true, "aria-label": label })
+      const form = h("form", { class: "kt-form", onsubmit: (e) => {
+        e.preventDefault()
+        if (!input.value.trim()) return
+        answer = input.value.trim()
+        close()
+      } },
+        h("label", { class: "kt-field" }, label, input),
+        h("div", { class: "kt-modal-actions" },
+          h("button", { type: "button", class: "kt-btn", onclick: () => close() }, "Cancelar"),
+          h("button", { type: "submit", class: "kt-btn kt-btn-primary" }, confirmLabel)))
+      const close = this.openModal(title, form, { onClose: () => resolve(answer) })
+    })
+  }
+
+  confirmAction({ title, body, confirmLabel = "Confirmar", danger = false }) {
+    return new Promise((resolve) => {
+      let answer = false
+      const confirm = h("button", { type: "button", class: `kt-btn ${danger ? "kt-btn-danger" : "kt-btn-primary"}`, autofocus: true,
+                                    onclick: () => { answer = true; close() } }, confirmLabel)
+      const close = this.openModal(title, h("div", { class: "kt-form" },
+        body ? h("p", {}, body) : null,
+        h("div", { class: "kt-modal-actions" },
+          h("button", { type: "button", class: "kt-btn", onclick: () => close() }, "Cancelar"), confirm)),
+      { onClose: () => resolve(answer) })
+      confirm.focus()
+    })
+  }
+
+  openShortcuts() {
+    this.openModal("Atalhos do teclado", h("div", { class: "kt-form" },
+      h("dl", { class: "kt-shortcuts" }, SHORTCUTS.flatMap(([keys, what]) => [h("dt", {}, h("kbd", {}, keys)), h("dd", {}, what)])),
+      h("p", { class: "kt-muted" }, "Botão direito (ou toque longo) no campo de batalha, numa carta ou no grimório abre as ações. Clique duplo numa carta da mão joga a carta.")))
+  }
+
+  // Debounced, cancels stale requests (a slow answer for "Sol" must not replace the
+  // one for "Sol Ring"), and the results can be picked with ↑/↓ + Enter.
   openSearch({ token, x, y }) {
-    const input = h("input", { type: "search", class: "kt-input", placeholder: token ? "Treasure, Soldier, Clue…" : "Nome da carta…" })
-    const results = h("ul", { class: "kt-search-results" })
+    const input = h("input", { type: "search", class: "kt-input", autofocus: true, "aria-label": "Nome da carta",
+                               placeholder: token ? "Treasure, Soldier, Clue…" : "Nome da carta…" })
+    const status = h("p", { class: "kt-muted kt-search-status", "aria-live": "polite" }, "Digite pelo menos 2 letras.")
+    const results = h("ul", { class: "kt-search-results", role: "listbox" })
     let timer = null
+    let request = null
     let close = null
+    const choose = (card) => { close(); this.perform("create_card", { card_id: card.id, token, x, y }) }
+    const buttons = () => [...results.querySelectorAll("button")]
+
     input.addEventListener("input", () => {
       clearTimeout(timer)
+      request?.abort()
+      const query = input.value.trim()
+      if (query.length < 2) { fill(results); status.textContent = "Digite pelo menos 2 letras."; return }
+      status.textContent = "Buscando…"
       timer = setTimeout(async () => {
-        const response = await fetch(`/cards/search?q=${encodeURIComponent(input.value)}`, { headers: { Accept: "application/json" } })
-        const cards = response.ok ? await response.json() : []
-        fill(results, cards.map((card) => h("li", {},
-          h("button", { class: "kt-menu-item", onclick: () => { close(); this.perform("create_card", { card_id: card.id, token, x, y }) } },
-            h("span", {}, card.name), h("span", { class: "kt-menu-key" }, card.type_line || "")))))
+        request = new AbortController()
+        try {
+          const response = await fetch(`/cards/search?q=${encodeURIComponent(query)}`, { headers: { Accept: "application/json" }, signal: request.signal })
+          if (!response.ok) throw new Error(response.statusText)
+          const cards = await response.json()
+          status.textContent = cards.length ? "" : `Nenhuma carta encontrada para “${query}”.`
+          fill(results, cards.map((card) => h("li", { role: "option" },
+            h("button", { class: "kt-menu-item", onclick: () => choose(card) },
+              h("span", {}, card.name), h("span", { class: "kt-menu-key" }, card.type_line || "")))))
+        } catch (error) {
+          if (error.name !== "AbortError") status.textContent = "Não foi possível buscar agora. Tente de novo."
+        }
       }, 200)
     })
-    close = this.openModal(token ? "Adicionar token" : "Adicionar carta", h("div", {}, input, results))
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown") { event.preventDefault(); buttons()[0]?.focus() }
+      if (event.key === "Enter") { event.preventDefault(); buttons()[0]?.click() }
+    })
+    results.addEventListener("keydown", (event) => {
+      const list = buttons()
+      const index = list.indexOf(document.activeElement)
+      if (event.key === "ArrowDown") { event.preventDefault(); list[Math.min(index + 1, list.length - 1)]?.focus() }
+      if (event.key === "ArrowUp") { event.preventDefault(); (index > 0 ? list[index - 1] : input).focus() }
+    })
+    close = this.openModal(token ? "Adicionar token" : "Adicionar carta", h("div", {}, input, status, results),
+      { onClose: () => { clearTimeout(timer); request?.abort() } })
   }
 
   openCustomCard({ x, y }) {
@@ -1211,8 +1542,11 @@ export default class extends Controller {
 
   promptPeek(seat) {
     const own = seat.seat_id === this.seatIdValue
-    const n = askCount(own ? "Olhar quantas cartas do topo do seu grimório?" : `Olhar quantas cartas do topo do grimório de ${seat.display_name}?`, own ? 3 : 1)
-    if (n) this.perform("peek", { count: n, target_seat_id: seat.seat_id })
+    this.askNumber({
+      title: own ? "Olhar o topo do seu grimório" : `Olhar o topo do grimório de ${seat.display_name}`,
+      label: "Quantas cartas?", value: own ? 3 : 1, presets: [1, 2, 3, 5], confirmLabel: "Olhar",
+      hint: own ? null : `${seat.display_name} e a mesa veem no log que você está olhando.`
+    }).then((n) => n && this.perform("peek", { count: n, target_seat_id: seat.seat_id }))
   }
 
   revealIds(ids) {
@@ -1221,10 +1555,17 @@ export default class extends Controller {
 
   toggleLog() {
     this.ui.logOpen = !this.ui.logOpen
+    if (this.ui.logOpen) this.ui.unreadChat = 0
     this.render()
+    if (this.ui.logOpen) this.el.log.querySelector(".kt-chat input")?.focus({ preventScroll: true })
   }
 
+  // Sending a deck mid-game redeals your seat, so say so plainly when you're playing.
   openDecklist() {
+    const playing = !!this.view && this.me?.ready
+    if (this.hasDecklistWarningTarget) this.decklistWarningTarget.hidden = !playing
+    if (this.hasDecklistSubmitTarget) this.decklistSubmitTarget.textContent = playing ? "Reiniciar meu jogo com este deck" : "Enviar deck"
+    if (this.hasDecklistSubmitTarget) this.decklistSubmitTarget.classList.toggle("kt-btn-danger", playing)
     if (!this.decklistDialogTarget.open) this.decklistDialogTarget.showModal()
   }
 
@@ -1234,29 +1575,20 @@ export default class extends Controller {
   }
 
   handleKey(event) {
-    if (!this.view?.seats || !this.me?.ready) return
-    if (event.key === "Control") {
-      // `hovered` can be stale when a redraw removed the card under the pointer
-      // without a mouseleave; only select what is really under it now.
-      const id = this.hovered?.instance.id
-      if (id && this.rootTarget.querySelector(`[data-id="${CSS.escape(id)}"]:hover`)) this.select(id)
+    if (!this.view?.seats) return
+    // Escape always closes whatever is on top — except inside the decklist <dialog>,
+    // which closes itself.
+    if (event.key === "Escape" && !event.target.closest("dialog")) return this.escape()
+    if (event.target.closest("input, textarea, select, dialog") || event.metaKey || event.ctrlKey || event.altKey) {
+      if (event.key === "Control") this.selectHovered()
       return
     }
-    if (event.target.closest("input, textarea, select, dialog") || event.metaKey || event.ctrlKey || event.altKey) return
-    if (event.key === "Escape") {
-      if (this.me.peek && !this.ui.menu && !this.el.modals.childElementCount) {
-        this.ui.searchFilter = ""
-        this.perform("stop_peek")
-      }
-      this.clearSelection()
-      this.ui.viewer = null
-      this.ui.menu = null
-      this.el.modals.replaceChildren()
-      return this.render()
-    }
+    if (event.key === "?") { event.preventDefault(); return this.openShortcuts() }
+    if (!this.me?.ready) return
+    if (this.el.modals.childElementCount) return
     const hovered = this.hovered
     const actions = {
-      d: () => this.perform("draw"),
+      d: () => this.drawOne(),
       u: () => this.perform("tap_all", { tapped: false }),
       s: () => this.perform("shuffle"),
       n: () => this.startTurn(),
@@ -1266,6 +1598,53 @@ export default class extends Controller {
     if (!action) return
     event.preventDefault()
     action()
+  }
+
+  // Closes the topmost thing: a menu, then a modal, then a viewer or peek, then the
+  // selection.
+  escape() {
+    if (this.ui.menu) return this.closeMenu()
+    if (this.el.modals.childElementCount) return this.closeModal()
+    if (this.me?.peek) {
+      this.ui.searchFilter = ""
+      this.perform("stop_peek")
+    }
+    this.clearSelection()
+    this.ui.viewer = null
+    this.render()
+  }
+
+  selectHovered() {
+    if (!this.me?.ready) return
+    // `hovered` can be stale when a redraw removed the card under the pointer
+    // without a mouseleave; only select what is really under it now.
+    const id = this.hovered?.instance.id
+    if (id && this.rootTarget.querySelector(`[data-id="${CSS.escape(id)}"]:hover`)) this.select(id)
+  }
+
+  // Touch screens: holding a finger still on the board opens the same menu a right
+  // click would; the click that follows the lift is swallowed.
+  startLongPress(event) {
+    if (event.pointerType !== "touch") return
+    const start = { x: event.clientX, y: event.clientY }
+    const target = event.target
+    const cancel = () => {
+      clearTimeout(timer)
+      document.removeEventListener("pointermove", onMove)
+      document.removeEventListener("pointerup", cancel)
+      document.removeEventListener("pointercancel", cancel)
+    }
+    const onMove = (e) => { if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) cancel() }
+    const timer = setTimeout(() => {
+      cancel()
+      target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: start.x, clientY: start.y }))
+      const swallow = (e) => { e.preventDefault(); e.stopPropagation() }
+      document.addEventListener("click", swallow, { capture: true, once: true })
+      setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 600)
+    }, LONG_PRESS_MS)
+    document.addEventListener("pointermove", onMove)
+    document.addEventListener("pointerup", cancel)
+    document.addEventListener("pointercancel", cancel)
   }
 
   // --- zoom & toasts --------------------------------------------------------------
@@ -1285,10 +1664,21 @@ export default class extends Controller {
     this.el?.zoom.classList.remove("kt-zoom-visible")
   }
 
-  toast(message, kind = "error") {
-    const el = h("div", { class: `kt-toast kt-toast-${kind}` }, message)
-    document.body.append(el)
-    setTimeout(() => el.remove(), 4000)
+  // Stacked bottom-center, newest last; click to dismiss. An optional action (e.g.
+  // "Desfazer") keeps the toast up a little longer.
+  toast(message, kind = "error", action = null) {
+    const container = this.el?.toasts
+    const el = h("div", { class: `kt-toast kt-toast-${kind}`, role: kind === "error" ? "alert" : "status", onclick: () => el.remove() },
+      h("span", {}, message),
+      action ? h("button", { class: "kt-toast-action", onclick: (e) => { e.stopPropagation(); el.remove(); action.run() } }, action.label) : null)
+    if (container) {
+      container.append(el)
+      while (container.childElementCount > 4) container.firstChild.remove()
+    } else {
+      el.classList.add("kt-toast-floating")
+      document.body.append(el)
+    }
+    setTimeout(() => el.remove(), action ? 7000 : 4000)
   }
 }
 
@@ -1311,9 +1701,25 @@ function signed(n) { return n > 0 ? `+${n}` : `${n}` }
 function shortName(name) { return name.split(" // ")[0].split(",")[0] }
 function shortCounter(key) { return key.length > 7 ? key.slice(0, 7) : key }
 
-function askCount(question, fallback) {
-  const answer = window.prompt(question, String(fallback))
-  if (answer === null) return null
-  const n = parseInt(answer, 10)
-  return Number.isFinite(n) && n > 0 ? n : null
+function plural(n, one, many) { return `${n} ${n === 1 ? one : many}` }
+function lastSequence(log) { return log?.length ? Math.max(...log.map((e) => e.sequence)) : 0 }
+
+// Enter/Space on a role="button" element acts like a click.
+function activateOnKey(run) {
+  return (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return
+    event.preventDefault()
+    run()
+  }
+}
+
+// Keeps Tab / Shift+Tab cycling inside a modal.
+function trapTab(event) {
+  if (event.key !== "Tab") return
+  const focusable = [...event.currentTarget.querySelectorAll("button:not(:disabled), input, select, textarea, a[href], [tabindex]:not([tabindex='-1'])")]
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }

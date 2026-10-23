@@ -10,7 +10,7 @@ module Table
 
       def call(table_slug:, seat_id:, card_id: nil, name: nil, custom: nil, token: true, count: 1, x: nil, y: nil)
         count = count.to_i
-        return Failure[:validation_error, "Create between 1 and #{MAX_COUNT} cards"] unless count.between?(1, MAX_COUNT)
+        return Failure[:validation_error, "Crie de 1 a #{MAX_COUNT} cartas"] unless count.between?(1, MAX_COUNT)
 
         source = step resolve_source(card_id, name, custom)
         step apply(table_slug) { |state| create(state, seat_id.to_s, source, token, count, x, y) }
@@ -21,16 +21,16 @@ module Table
       def resolve_source(card_id, name, custom)
         if custom.present?
           custom = custom.to_h.transform_keys(&:to_s).slice(*CUSTOM_FIELDS).transform_values { |v| v.to_s.strip.first(60) }
-          return custom["name"].present? ? Success(custom: custom) : Failure[:validation_error, "A custom card needs a name"]
+          return custom["name"].present? ? Success(custom: custom) : Failure[:validation_error, "A carta personalizada precisa de um nome"]
         end
 
         card = card_id.present? ? card_catalog.find_many([ card_id.to_i ])[card_id.to_i] : card_catalog.find_by_name(name.to_s)
-        card ? Success(card_id: card.id) : Failure[:validation_error, "Unknown card: \"#{name || card_id}\""]
+        card ? Success(card_id: card.id) : Failure[:validation_error, "Carta desconhecida: \"#{name || card_id}\""]
       end
 
       def create(state, seat_id, source, token, count, x, y)
         seat_state = state.seat(seat_id)
-        return Failure[:not_found, "Seat has no game state yet"] unless seat_state
+        return Failure[:not_found, "Esse jogador ainda não enviou um deck"] unless seat_state
 
         count.times do |i|
           instance = Entities::CardInstance.new(

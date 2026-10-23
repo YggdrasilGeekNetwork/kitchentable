@@ -56,18 +56,6 @@ module Persistence
         card.legal_in?(format)
       end
 
-      private
-
-      def token_match_score(token, text)
-        return 0 unless token.power && token.toughness
-
-        phrase = text.match(/#{Regexp.escape(token.power)}\/#{Regexp.escape(token.toughness)} ([a-z ,]*?)#{Regexp.escape(token.name)}/i)
-        return 0 unless phrase
-
-        said = COLOR_WORDS.filter_map { |word, color| color if phrase[1].downcase.include?(word) }
-        said.sort == Array(token.colors).sort ? 2 : 1
-      end
-
       def upsert_bulk(card_attrs_list)
         # record_timestamps: false — the importer already sets created_at/updated_at
         # itself; leaving Rails' own timestamp touching on double-assigns `updated_at`
@@ -81,6 +69,18 @@ module Persistence
             legalities image_uris card_faces alternate_names_normalized layout set_code collector_number rarity updated_at
           ]
         )
+      end
+
+      private
+
+      def token_match_score(token, text)
+        return 0 unless token.power && token.toughness
+
+        phrase = text.match(/#{Regexp.escape(token.power)}\/#{Regexp.escape(token.toughness)} ([a-z ,]*?)#{Regexp.escape(token.name)}/i)
+        return 0 unless phrase
+
+        said = COLOR_WORDS.filter_map { |word, color| color if phrase[1].downcase.include?(word) }
+        said.sort == Array(token.colors).sort ? 2 : 1
       end
     end
   end
